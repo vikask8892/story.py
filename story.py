@@ -15,7 +15,7 @@ def get_wisdom_package():
     Write a 500-word gripping, true story about a rare historical event or person.
     Focus on: Human emotion, vivid descriptions, and a life-changing lesson.
     
-    Format:
+    Format EXACTLY like this:
     TITLE: [Beautiful Title]
     STORY: [The 500-word narrative]
     CHALLENGE: [One sentence 24-hour mission]
@@ -39,15 +39,20 @@ def get_wisdom_package():
         visual = extract("VISUAL", full_text) or "Soft watercolor painting, cinematic sunlight"
         
         try:
-            story = full_text.split("STORY:")[1].split("CHALLENGE:")[0].strip()
+            raw_story = full_text.split("STORY:")[1].split("CHALLENGE:")[0].strip()
+            # LOGIC FOR DROP CAP: Take the first letter and the rest of the story separately
+            first_letter = raw_story[0]
+            remaining_story = raw_story[1:].replace('\n', '<br>')
+            
+            # Formatted story with Drop Cap span
+            story_html = f"""<span style="float: left; color: #a68b5a; font-size: 75px; line-height: 60px; padding-top: 4px; padding-right: 8px; padding-left: 3px; font-family: 'Georgia', serif; font-weight: bold;">{first_letter}</span>{remaining_story}"""
         except:
-            story = "The pages are being turned. Please wait."
+            story_html = "The pages are being turned. Please wait."
 
         encoded_visual = urllib.parse.quote(visual)
-        # Using a slight artistic filter in the prompt for the storybook look
         image_url = f"https://image.pollinations.ai/prompt/{encoded_visual}%20style%20of%20oil%20painting%20highly%20detailed?width=1000&height=600&nologo=true"
         
-        return title, story.replace('\n', '<br>'), challenge, image_url
+        return title, story_html, challenge, image_url
     except Exception as e:
         return "The Unwritten Chapter", "Error loading story.", "Stay curious.", ""
 
@@ -61,30 +66,30 @@ def send_story():
     msg['From'] = f"The Storyteller <{EMAIL_SENDER}>"
     msg['To'] = EMAIL_SENDER
     
-    # STORYBOOK DESIGN: Cream background (#FFFDF5), Dark Slate text (#2C3E50), and Gold accents
     html = f"""
-    <div style="background-color: #f4f1ea; padding: 40px 10px; font-family: 'Georgia', serif;">
+    <div style="background-color: #f7f3ed; padding: 40px 10px; font-family: 'Georgia', serif;">
         <div style="max-width: 600px; margin: auto; background-color: #fffdf5; padding: 50px; border-radius: 2px; box-shadow: 0 10px 30px rgba(0,0,0,0.05); border: 1px solid #e0dcd0;">
             
             <div style="text-align: center; margin-bottom: 40px;">
-                <p style="text-transform: uppercase; letter-spacing: 3px; font-size: 12px; color: #a68b5a; margin-bottom: 10px;">Chapter {datetime.now().timetuple().tm_yday}</p>
-                <h1 style="font-size: 36px; font-weight: normal; color: #2c3e50; margin: 0; line-height: 1.2;">{title}</h1>
-                <div style="width: 50px; height: 2px; background-color: #a68b5a; margin: 20px auto;"></div>
+                <p style="text-transform: uppercase; letter-spacing: 4px; font-size: 11px; color: #a68b5a; margin-bottom: 10px;">• Entry {datetime.now().strftime('%B %d')} •</p>
+                <h1 style="font-size: 42px; font-weight: normal; color: #1a252f; margin: 0; line-height: 1.1; font-family: 'Times New Roman', serif;">{title}</h1>
+                <div style="width: 60px; height: 1px; background-color: #a68b5a; margin: 25px auto;"></div>
             </div>
 
-            <img src="{image_url}" style="width: 100%; height: auto; border-radius: 4px; margin-bottom: 35px; box-shadow: 0 4px 15px rgba(0,0,0,0.1);">
+            <img src="{image_url}" style="width: 100%; height: auto; border-radius: 2px; margin-bottom: 40px; border: 1px solid #f0ede4;">
             
-            <div style="font-size: 19px; line-height: 1.8; color: #34495e; text-align: left; orphans: 3; widows: 3;">
+            <div style="font-size: 20px; line-height: 1.8; color: #2c3e50; text-align: justify; hyphens: auto;">
                 {story}
             </div>
             
-            <div style="margin-top: 50px; padding: 30px; border-top: 1px double #e0dcd0; border-bottom: 1px double #e0dcd0; text-align: center; background-color: #fcfbf7;">
-                <p style="font-size: 14px; text-transform: uppercase; letter-spacing: 2px; color: #a68b5a; margin-bottom: 10px;">The 24-Hour Mission</p>
-                <p style="font-size: 20px; font-style: italic; color: #2c3e50; margin: 0;">"{challenge}"</p>
+            <div style="margin-top: 50px; padding: 30px; border: 1px solid #e0dcd0; text-align: center; background-color: #fcfbf7; border-radius: 8px;">
+                <p style="font-size: 13px; text-transform: uppercase; letter-spacing: 2px; color: #a68b5a; margin-bottom: 12px; font-weight: bold;">The 24-Hour Reflection</p>
+                <p style="font-size: 22px; font-style: italic; color: #1a252f; margin: 0; line-height: 1.4;">"{challenge}"</p>
             </div>
             
-            <div style="text-align: center; margin-top: 40px;">
-                <p style="font-size: 12px; color: #95a5a6; font-style: italic;">The End of Today's Lesson. <br> Tomorrow, the ink flows again.</p>
+            <div style="text-align: center; margin-top: 50px;">
+                <div style="color: #a68b5a; font-size: 20px; margin-bottom: 10px;">❦</div>
+                <p style="font-size: 12px; color: #95a5a6; font-style: italic; letter-spacing: 1px;">End of Chapter. Tomorrow, the journey continues.</p>
             </div>
         </div>
     </div>
@@ -97,7 +102,7 @@ def send_story():
             server.starttls()
             server.login(EMAIL_SENDER, EMAIL_PASSWORD)
             server.sendmail(EMAIL_SENDER, [EMAIL_SENDER], msg.as_string())
-        print("Success: The Storybook edition has been delivered.")
+        print("Success: The Drop-Cap Storybook edition has been delivered.")
     except Exception as e:
         print(f"Delivery Error: {e}")
 
