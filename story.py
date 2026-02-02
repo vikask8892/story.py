@@ -1,40 +1,31 @@
 import requests, os, smtplib, urllib.parse, re
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
+from email.mime.application import MIMEApplication
 from datetime import datetime
+from fpdf import FPDF
 
-# CONFIG
+# --- CONFIGURATION ---
 EMAIL_SENDER = str(os.environ.get('EMAIL_USER', '')).strip()
 EMAIL_PASSWORD = str(os.environ.get('EMAIL_PASS', '')).strip()
 GEMINI_KEY = str(os.environ.get('GEMINI_API_KEY', '')).strip()
 
 def get_wisdom_package():
     url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key={GEMINI_KEY}"
-    
-    # Calculate a sequence number based on days passed since Jan 1st
     day_of_year = datetime.now().timetuple().tm_yday
     
     prompt = f"""
-    Today is Day {day_of_year} of the journey. 
-    Act as a wise philosopher who speaks to Gen Z. 
-    
+    Today is Day {day_of_year} of the Gita journey. 
     TASK:
-    1. Identify the verse from Bhagvad Gita corresponding to this sequence (start from Chapter 1, Verse 1 and move forward daily).
+    1. Identify the verse from Bhagvad Gita starting from Chapter 1, Verse 1.
     2. Provide:
-       - SANSKRIT: The Shloka.
-       - HINDI: The meaning written in Hindi Devanagari script.
-       - VIBE CHECK: A 1-sentence Gen Z summary (Hinglish allowed).
-       - STORY: A 500-word gripping, modern-day story (English/Hinglish) illustrating this specific verse. 
+       - VERSE: The Sanskrit Shloka.
+       - HINDI: The meaning in Hindi Devanagari.
+       - VIBE: A 1-sentence Gen Z summary (Hinglish).
+       - STORY: A 500-word modern-day story (English/Hinglish) based on this verse. 
        - CHALLENGE: A practical 24-hour mission.
-       - VISUAL: A prompt for an oil painting of this scene.
-
-    Format EXACTLY:
-    VERSE: [Sanskrit]
-    HINDI: [Hindi Meaning]
-    VIBE: [Summary]
-    STORY: [Narrative]
-    CHALLENGE: [Mission]
-    VISUAL: [Image Prompt]
+       - VISUAL: A prompt for a cinematic oil painting.
+       - TITLE: A short, catchy title for this story.
     """
     
     payload = {"contents": [{"parts": [{"text": prompt}]}]}
@@ -54,63 +45,113 @@ def get_wisdom_package():
         vibe = extract("VIBE", full_text)
         challenge = extract("CHALLENGE", full_text)
         visual = extract("VISUAL", full_text)
+        title = extract("TITLE", full_text) or f"Day {day_of_year}"
         raw_story = extract("STORY", full_text)
 
-        # Drop Cap for Storybook Feel
+        # HTML Drop Cap Logic
         first_letter = raw_story[0]
         remaining_story = raw_story[1:].replace('\n', '<br>')
         story_html = f"""<span style="float: left; color: #b8922e; font-size: 70px; line-height: 60px; padding-top: 4px; padding-right: 8px; font-weight: bold; font-family: serif;">{first_letter}</span>{remaining_story}"""
 
         image_url = f"https://image.pollinations.ai/prompt/{urllib.parse.quote(visual)}?width=1000&height=600&nologo=true"
         
-        return shloka, hindi, vibe, story_html, challenge, image_url
+        return shloka, hindi, vibe, story_html, raw_story, challenge, image_url, title
     except Exception as e:
-        print(f"Error: {e}")
-        return "Shloka loading...", "Bhavarth loading...", "Vibe check failing.", "Story loading...", "", ""
+        print(f"Gemini Error: {e}")
+        return None
+
+def create_pdf(title, shloka, hindi, vibe, raw_story, challenge):
+    pdf = FPDF()
+    pdf.add_page()
+    
+    # 1. Hindi Font Support (Requires NotoSansDevanagari-Regular.ttf in repo)
+    font_path = 'NotoSansDevanagari-Regular.ttf'
+    if os.path.exists(font_path):
+        pdf.add_font('HindiFont', '', font_path)
+        pdf.set_font('HindiFont', '', 14)
+    else:
+        pdf.set_font('Arial', '', 12)
+        print("Warning: Font file not found. Hindi may not render correctly.")
+
+    # PDF Layout
+    pdf.set_text_color(184, 146, 46) 
+    pdf.cell(0, 20, txt=f"THE GITA CODE: {title}", ln=True, align='C')
+    pdf.ln(5)
+    
+    pdf.set_text_color(44, 62, 80)
+    pdf.multi_cell(0, 10, txt=f"{shloka}\n\n{hindi}", align='C')
+    pdf.ln(10)
+    
+    pdf.set_font("Arial", 'B', 12)
+    pdf.set_text_color(0, 0, 0)
+    pdf.cell(0, 10, txt="VIBE CHECK:", ln=True)
+    pdf.set_font("Arial", '', 12)
+    pdf.multi_cell(0, 8, txt=vibe)
+    pdf.ln(10)
+    
+    pdf.set_font("Times", '', 12)
+    pdf.multi_cell(0, 8, txt=raw_story)
+    pdf.ln(10)
+    
+    pdf.set_fill_color(249, 247, 242)
+    pdf.set_font("Arial", 'B', 14)
+    pdf.cell(0, 15, txt=f"MISSION: {challenge}", ln=True, align='C', fill=True, border=1)
+    
+    filename = f"Gita_Code_{datetime.now().strftime('%Y%m%d')}.pdf"
+    pdf.output(filename)
+    return filename
 
 def send_story():
-    if not EMAIL_SENDER: return
-    shloka, hindi, vibe, story, challenge, image_url = get_wisdom_package()
+    package = get_wisdom_package()
+    if not package: return
+    shloka, hindi, vibe, story_html, raw_story, challenge, image_url, title = package
     
+    # Generate PDF
+    pdf_file = create_pdf(title, shloka, hindi, vibe, raw_story, challenge)
+    
+    # Prepare Email
     msg = MIMEMultipart()
-    msg['Subject'] = f"The Gita Code | Day {datetime.now().timetuple().tm_yday}"
+    msg['Subject'] = f"📜 The Gita Code | {title}"
     msg['From'] = f"The Storyteller <{EMAIL_SENDER}>"
     msg['To'] = EMAIL_SENDER
     
-    html = f"""
+    html_body = f"""
     <div style="background-color: #fdfaf5; padding: 30px 10px; font-family: 'Georgia', serif; color: #2c3e50;">
-        <div style="max-width: 600px; margin: auto; background-color: #ffffff; padding: 40px; border-radius: 4px; border: 1px solid #e0dcd0; box-shadow: 0 4px 20px rgba(0,0,0,0.05);">
-            
-            <div style="text-align: center; border-bottom: 1px solid #eee; padding-bottom: 20px; margin-bottom: 30px;">
-                <p style="text-transform: uppercase; letter-spacing: 3px; font-size: 11px; color: #a68b5a;">The Eternal Song • Series I</p>
-                <div style="font-size: 20px; color: #1a252f; margin: 20px 0; font-weight: bold; line-height: 1.6;">{shloka}</div>
-                <div style="font-size: 18px; color: #5d4037; font-style: italic;">{hindi}</div>
+        <div style="max-width: 600px; margin: auto; background-color: #ffffff; padding: 40px; border-top: 8px solid #d4af37; border: 1px solid #e0dcd0;">
+            <div style="text-align: center; margin-bottom: 20px;">
+                <p style="text-transform: uppercase; letter-spacing: 3px; font-size: 11px; color: #a68b5a;">The Eternal Song</p>
+                <h1 style="color: #1a252f;">{title}</h1>
+                <div style="font-size: 18px; font-style: italic; color: #5d4037;">{shloka}<br><br>{hindi}</div>
             </div>
-
-            <div style="background: #fffcf0; border-left: 4px solid #b8922e; padding: 15px; margin-bottom: 30px; font-size: 16px;">
+            <div style="background: #fffcf0; border-left: 4px solid #b8922e; padding: 15px; margin: 20px 0;">
                 <strong>VIBE CHECK:</strong> {vibe}
             </div>
-
-            <img src="{image_url}" style="width: 100%; border-radius: 2px; margin-bottom: 30px;">
-            
-            <div style="font-size: 19px; line-height: 1.8; text-align: justify; color: #34495e;">
-                {story}
+            <img src="{image_url}" style="width: 100%; border-radius: 4px; margin-bottom: 30px;">
+            <div style="font-size: 19px; line-height: 1.8; text-align: justify;">{story_html}</div>
+            <div style="margin-top: 40px; padding: 25px; background: #f9f7f2; border: 1px dashed #b8922e; text-align: center; border-radius: 10px;">
+                <p style="font-size: 19px; font-weight: bold;">{challenge}</p>
             </div>
-            
-            <div style="margin-top: 40px; padding: 25px; background-color: #f9f7f2; border: 1px dashed #b8922e; border-radius: 10px; text-align: center;">
-                <p style="font-size: 12px; text-transform: uppercase; letter-spacing: 2px; color: #a68b5a;">Daily Dharma Mission</p>
-                <p style="font-size: 19px; font-weight: bold; color: #1a252f; margin: 10px 0;">{challenge}</p>
-            </div>
-
-            <div style="text-align: center; margin-top: 40px; font-size: 20px;">🪷</div>
         </div>
     </div>
     """
-    msg.attach(MIMEText(html, 'html'))
-    with smtplib.SMTP('smtp.gmail.com', 587) as s:
-        s.starttls()
-        s.login(EMAIL_SENDER, EMAIL_PASSWORD)
-        s.sendmail(EMAIL_SENDER, [EMAIL_SENDER], msg.as_string())
+    msg.attach(MIMEText(html_body, 'html'))
+    
+    # Attach PDF
+    if os.path.exists(pdf_file):
+        with open(pdf_file, "rb") as f:
+            part = MIMEApplication(f.read(), _subtype="pdf")
+            part.add_header('Content-Disposition', 'attachment', filename=pdf_file)
+            msg.attach(part)
+
+    # Dispatch
+    try:
+        with smtplib.SMTP('smtp.gmail.com', 587) as s:
+            s.starttls()
+            s.login(EMAIL_SENDER, EMAIL_PASSWORD)
+            s.sendmail(EMAIL_SENDER, [EMAIL_SENDER], msg.as_string())
+        print("Storybook & PDF delivered successfully.")
+    except Exception as e:
+        print(f"SMTP Error: {e}")
 
 if __name__ == "__main__":
     send_story()
