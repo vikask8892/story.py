@@ -1,4 +1,4 @@
-import requests, os, smtplib, urllib.parse
+import requests, os, smtplib, urllib.parse, re
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from datetime import datetime
@@ -9,59 +9,78 @@ EMAIL_PASSWORD = os.environ.get('EMAIL_PASS')
 GEMINI_KEY = os.environ.get('GEMINI_API_KEY')
 
 def get_wisdom_package():
+    # Using 2.5-flash-lite as we discussed
     url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key={GEMINI_KEY}"
     
-    # The "Master Prompt" for 500 words of rare wisdom
     prompt = """
-    Write a 500-word deep, immersive, and rare story. 
-    Theme: A life-changing concept (e.g., Entropy, Stoic Fortitude, or the Butterfly Effect).
-    Style: Cinematic, impressive, and rare. Not a generic 'be positive' story. 
-    It should appeal to smart people and feel like a high-end comic or a short film.
+    Write a 500-word deep, immersive story for a group of smart readers. 
+    Theme: A rare, life-changing concept (like 'Antifragility', 'The Lindy Effect', or 'Sunk Cost Fallacy').
+    Style: Narrative, cinematic, and impressive. Build a world and explain the deep insight within the story.
     
-    At the very end, add the label 'VISUAL:' followed by a 1-sentence cinematic 
-    description for an image generator.
+    Format EXACTLY like this:
+    TITLE: [Name]
+    STORY: [The 500-word content]
+    VISUAL: [1-sentence cinematic prompt]
     """
     
-    payload = {"contents": [{"parts": [{"text": prompt}]}]}
-    response = requests.post(url, json=payload, timeout=60)
+    payload = {
+        "contents": [{"parts": [{"text": prompt}]}],
+        "safetySettings": [
+            {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
+            {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE"},
+            {"category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_NONE"},
+            {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE"}
+        ]
+    }
+    
+    response = requests.post(url, json=payload, timeout=90)
     data = response.json()
+    
+    # DEBUG: This will show in your GitHub logs if it fails again
+    if 'candidates' not in data:
+        print(f"API Error Response: {data}")
+        return "The Silent Scroll", "The archives are temporarily sealed. Please check back at midnight.", "A mysterious sealed stone door"
+
     full_text = data['candidates'][0]['content']['parts'][0]['text']
     
-    # Splitting Story and Image Prompt
-    if "VISUAL:" in full_text:
-        story, visual = full_text.split("VISUAL:")
-    else:
-        story, visual = full_text, "A cosmic eye watching the birth of a star, cinematic lighting"
+    # Safer extraction logic
+    title_match = re.search(r"TITLE:(.*)", full_text)
+    visual_match = re.search(r"VISUAL:(.*)", full_text)
     
-    # Generate FREE Image URL
-    encoded_visual = urllib.parse.quote(visual.strip())
-    image_url = f"https://image.pollinations.ai/prompt/{encoded_visual}?width=1000&height=600&nologo=true&seed={datetime.now().day}"
+    title = title_match.group(1).strip() if title_match else "The Midnight Scroll"
+    visual = visual_match.group(1).strip() if visual_match else "Cinematic mystery lighting"
     
-    return story.replace('\n', '<br>'), image_url
+    try:
+        # Extract story between STORY: and VISUAL:
+        story = full_text.split("STORY:")[1].split("VISUAL:")[0].strip()
+    except:
+        story = full_text # Fallback to full text if split fails
+
+    # Generate Image
+    encoded_visual = urllib.parse.quote(visual)
+    image_url = f"https://image.pollinations.ai/prompt/{encoded_visual}?width=1000&height=600&nologo=true"
+    
+    return title, story.replace('\n', '<br>'), image_url
 
 def send_story():
-    story, image_url = get_wisdom_package()
-    today = datetime.now().strftime("%d %b %Y")
+    title, story, image_url = get_wisdom_package()
     
     msg = MIMEMultipart()
-    msg['Subject'] = f"The Midnight Scroll: {today}"
+    msg['Subject'] = f"The Midnight Scroll: {title}"
     
-    # Comic-style HTML Layout
     html = f"""
-    <div style="font-family: 'Courier New', Courier, monospace; background: #0a0a0a; padding: 20px; color: #eee;">
-        <div style="max-width: 650px; margin: auto; background: #1a1a1a; border: 3px solid #ffd700; padding: 30px;">
-            <h1 style="text-align: center; color: #ffd700; text-transform: uppercase; letter-spacing: 5px;">THE MIDNIGHT SCROLL</h1>
-            <p style="text-align: center; font-size: 12px; color: #888; margin-bottom: 25px;">ENTRY NO. {datetime.now().timetuple().tm_yday}</p>
+    <div style="font-family: 'Georgia', serif; background: #050505; padding: 20px; color: #fff;">
+        <div style="max-width: 650px; margin: auto; background: #111; border: 2px solid #ffd700; padding: 30px; box-shadow: 0 0 20px #000;">
+            <h1 style="text-align: center; color: #ffd700; text-transform: uppercase; letter-spacing: 3px;">{title}</h1>
+            <hr style="border: 0; border-top: 1px solid #333; margin: 20px 0;">
             
-            <img src="{image_url}" style="width: 100%; border: 1px solid #ffd700; filter: grayscale(20%);">
+            <img src="{image_url}" style="width: 100%; border: 1px solid #ffd700;">
             
-            <div style="font-size: 18px; line-height: 1.8; margin-top: 30px; text-align: justify; color: #fff;">
+            <div style="font-size: 17px; line-height: 1.8; text-align: justify; color: #ddd; margin-top: 25px;">
                 {story}
             </div>
             
-            <div style="margin-top: 40px; border-top: 1px dashed #ffd700; padding-top: 20px; text-align: center;">
-                <p style="font-style: italic; color: #ffd700;">Pass this scroll to someone who seeks the truth.</p>
-            </div>
+            <p style="text-align: center; margin-top: 40px; font-size: 12px; color: #555;">&copy; 2026 The Midnight Scroll</p>
         </div>
     </div>
     """
@@ -72,6 +91,7 @@ def send_story():
         server.starttls()
         server.login(EMAIL_SENDER, EMAIL_PASSWORD)
         server.sendmail(EMAIL_SENDER, EMAIL_SENDER, msg.as_string())
+    print("Scroll delivered successfully.")
 
 if __name__ == "__main__":
     send_story()
