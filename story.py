@@ -11,8 +11,27 @@ EMAIL_SENDER = str(os.environ.get('EMAIL_USER', '')).strip()
 EMAIL_PASSWORD = str(os.environ.get('EMAIL_PASS', '')).strip()
 GEMINI_KEY = str(os.environ.get('GEMINI_API_KEY', '')).strip()
 
+# Set this to the date you want to be "Day 1" (Year, Month, Day)
+START_DATE = datetime(2026, 2, 2) 
+
+# Gita Chapter Lengths
+GITA_CH_LENGTHS = [47, 72, 43, 42, 29, 47, 30, 28, 34, 42, 55, 20, 35, 27, 20, 24, 28, 78]
+
+def get_current_day_number():
+    """Calculates days passed since START_DATE."""
+    delta = datetime.now() - START_DATE
+    return delta.days + 1  # Results in 1 today, 2 tomorrow
+
+def get_current_verse_ref(day_num):
+    """Maps day number to specific Ch and Verse."""
+    count = 0
+    for ch_idx, length in enumerate(GITA_CH_LENGTHS):
+        if day_num <= count + length:
+            return ch_idx + 1, day_num - count
+        count += length
+    return 1, 1
+
 def clean_for_pdf(text):
-    """Replaces smart quotes/dashes and removes markdown to prevent PDF crashes."""
     if not text: return ""
     text = re.sub(r'\*+', '', text)
     replacements = {
@@ -24,24 +43,30 @@ def clean_for_pdf(text):
     return text.strip()
 
 def get_wisdom_package():
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key={GEMINI_KEY}"
-    day_of_year = datetime.now().timetuple().tm_yday
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={GEMINI_KEY}"
+    
+    day_num = get_current_day_number()
+    chapter, verse = get_current_verse_ref(day_num)
     
     prompt = f"""
-    Today is Day {day_of_year} of the Gita journey. 
-    Identify the verse from Bhagvad Gita (Sequence: Chapter 1, Verse 1 onwards).
+    Today is Day {day_num} of the Gita journey. 
+    TASK: Explain Bhagavad Gita CHAPTER {chapter}, VERSE {verse}.
     
     Format EXACTLY like this:
-    [SHLOKA]: (Sanskrit only)
-    [HINDI]: (Hindi translation only)
+    [SHLOKA]: (Sanskrit of Ch {chapter}.{verse})
+    [HINDI]: (Hindi translation)
     [VIBE]: (One sentence Gen Z summary)
     [TITLE]: (Catchy 3-4 word title)
-    [STORY]: (500-word modern story)
+    [STORY]: (500-word modern story reflecting Ch {chapter}.{verse})
     [CHALLENGE]: (One sentence mission)
-    [VISUAL]: (Image prompt description)
+    [VISUAL]: (Cinematic image prompt)
     """
     
-    payload = {"contents": [{"parts": [{"text": prompt}]}]}
+    # temperature: 0.0 makes the AI response consistent for testing
+    payload = {
+        "contents": [{"parts": [{"text": prompt}]}],
+        "generationConfig": {"temperature": 0.0}
+    }
     
     try:
         response = requests.post(url, json=payload, timeout=90)
@@ -56,31 +81,28 @@ def get_wisdom_package():
         shloka = extract("SHLOKA", full_text)
         hindi = extract("HINDI", full_text)
         vibe = clean_for_pdf(extract("VIBE", full_text))
-        title = clean_for_pdf(extract("TITLE", full_text)) or f"Day {day_of_year}"
+        title = clean_for_pdf(extract("TITLE", full_text))
         challenge = clean_for_pdf(extract("CHALLENGE", full_text))
         visual = extract("VISUAL", full_text)
         raw_story = clean_for_pdf(extract("STORY", full_text))
 
         first_letter = raw_story[0] if raw_story else "T"
-        remaining_story = raw_story[1:].replace('\n', '<br>') if raw_story else ""
-        story_html = f"""<span style="float: left; color: #b8922e; font-size: 70px; line-height: 60px; padding-top: 4px; padding-right: 8px; font-weight: bold; font-family: serif;">{first_letter}</span>{remaining_story}"""
+        story_html = f"""<span style="float: left; color: #b8922e; font-size: 70px; line-height: 60px; padding-top: 4px; padding-right: 8px; font-weight: bold;">{first_letter}</span>{raw_story[1:].replace('\n', '<br>')}"""
         image_url = f"https://image.pollinations.ai/prompt/{urllib.parse.quote(visual)}?width=1000&height=600&nologo=true"
         
-        return shloka, hindi, vibe, story_html, raw_story, challenge, image_url, title
+        return shloka, hindi, vibe, story_html, raw_story, challenge, image_url, title, day_num, chapter, verse
     except Exception as e:
         print(f"Extraction Error: {e}")
         return None
 
-def create_pdf(title, shloka, hindi, vibe, raw_story, challenge):
+def create_pdf(title, shloka, hindi, vibe, raw_story, challenge, day, ch, v):
     pdf = FPDF()
-    pdf.set_auto_page_break(auto=True, margin=15)
+    pdf.set_auto_page_break(auto=True, margin=25)
     pdf.add_page()
     
     font_path = 'NotoSansDevanagari-Regular.ttf'
-    has_unicode_font = os.path.exists(font_path)
-    
-    if has_unicode_font: 
-        # Registering the same file for both regular AND bold to prevent crashes
+    has_font = os.path.exists(font_path)
+    if has_font:
         pdf.add_font('GitaFont', '', font_path)
         pdf.add_font('GitaFont', 'B', font_path)
         main_font = 'GitaFont'
@@ -90,7 +112,7 @@ def create_pdf(title, shloka, hindi, vibe, raw_story, challenge):
     # 1. Header
     pdf.set_font(main_font, 'B', 10)
     pdf.set_text_color(166, 139, 90)
-    pdf.cell(0, 10, text="THE GITA CODE - SERIES I", align='C', new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+    pdf.cell(0, 10, text=f"THE GITA CODE - DAY {day} | CHAPTER {ch}, VERSE {v}", align='C', new_x=XPos.LMARGIN, new_y=YPos.NEXT)
     pdf.ln(5)
 
     # 2. Title
@@ -108,7 +130,7 @@ def create_pdf(title, shloka, hindi, vibe, raw_story, challenge):
     pdf.multi_cell(0, 8, text=hindi, align='C')
     pdf.ln(10)
 
-    # 4. Vibe Check
+    # 4. Vibe
     pdf.set_fill_color(252, 251, 247)
     pdf.set_font(main_font, 'B', 11)
     pdf.set_text_color(184, 146, 46)
@@ -122,27 +144,34 @@ def create_pdf(title, shloka, hindi, vibe, raw_story, challenge):
     pdf.set_font(main_font, '', 12)
     pdf.set_text_color(44, 62, 80)
     pdf.multi_cell(0, 8, text=raw_story, align='J')
-    pdf.ln(15)
+    pdf.ln(20)
 
-    # 6. Mission
+    # 6. Mission Footer
     pdf.set_fill_color(26, 37, 47)
     pdf.set_text_color(255, 255, 255)
     pdf.set_font(main_font, 'B', 12)
     pdf.multi_cell(0, 15, text=f"MISSION: {challenge}", align='C', fill=True)
+    
+    # 7. Lotus Image
+    try:
+        lotus_url = "https://cdn-icons-png.flaticon.com/512/2913/2913459.png"
+        pdf.image(lotus_url, x=95, y=pdf.h - 25, w=15)
+    except:
+        pass
 
-    filename = f"Gita_Code_{datetime.now().strftime('%Y%m%d')}.pdf"
+    filename = f"Gita_Code_Day_{day}.pdf"
     pdf.output(filename)
     return filename
 
 def send_story():
     package = get_wisdom_package()
     if not package: return
-    shloka, hindi, vibe, story_html, raw_story, challenge, image_url, title = package
+    shloka, hindi, vibe, story_html, raw_story, challenge, image_url, title, day, ch, v = package
     
-    pdf_file = create_pdf(title, shloka, hindi, vibe, raw_story, challenge)
+    pdf_file = create_pdf(title, shloka, hindi, vibe, raw_story, challenge, day, ch, v)
     
     msg = MIMEMultipart()
-    msg['Subject'] = f"📜 The Gita Code | {title}"
+    msg['Subject'] = f"📜 Day {day} | {title}"
     msg['From'] = f"The Storyteller <{EMAIL_SENDER}>"
     msg['To'] = EMAIL_SENDER
     
@@ -150,7 +179,7 @@ def send_story():
     <div style="background-color: #fdfaf5; padding: 30px 10px; font-family: 'Georgia', serif; color: #2c3e50;">
         <div style="max-width: 600px; margin: auto; background-color: #ffffff; padding: 40px; border-top: 8px solid #d4af37; border: 1px solid #e0dcd0;">
             <div style="text-align: center;">
-                <p style="text-transform: uppercase; letter-spacing: 3px; font-size: 11px; color: #a68b5a;">The Eternal Song</p>
+                <p style="text-transform: uppercase; letter-spacing: 3px; font-size: 11px; color: #a68b5a;">Day {day} • Chapter {ch} Verse {v}</p>
                 <h1 style="color: #1a252f; font-size: 32px;">{title}</h1>
                 <div style="font-size: 18px; font-style: italic; color: #5d4037; margin: 20px 0;">{shloka}<br><br>{hindi}</div>
             </div>
@@ -160,6 +189,7 @@ def send_story():
                 <p style="font-size: 11px; text-transform: uppercase; color: #d4af37;">24-Hour Mission</p>
                 <p style="font-size: 18px; font-weight: bold; margin: 5px 0;">{challenge}</p>
             </div>
+            <p style="text-align: center; color: #a68b5a; font-size: 25px; margin-top: 20px;">🪷</p>
         </div>
     </div>
     """
@@ -176,7 +206,7 @@ def send_story():
             s.starttls()
             s.login(EMAIL_SENDER, EMAIL_PASSWORD)
             s.sendmail(EMAIL_SENDER, [EMAIL_SENDER], msg.as_string())
-        print("Success: Final edition delivered.")
+        print(f"Success: Day {day} (Ch {ch}.{v}) delivered.")
     except Exception as e:
         print(f"SMTP Error: {e}")
 
