@@ -11,15 +11,30 @@ GEMINI_KEY = str(os.environ.get('GEMINI_API_KEY', '')).strip()
 def get_wisdom_package():
     url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key={GEMINI_KEY}"
     
-    prompt = """
-    Write a 500-word gripping, true story about a rare historical event or person.
-    Focus on: Human emotion, vivid descriptions, and a life-changing lesson.
+    # Calculate a sequence number based on days passed since Jan 1st
+    day_of_year = datetime.now().timetuple().tm_yday
     
-    Format EXACTLY like this:
-    TITLE: [Beautiful Title]
-    STORY: [The 500-word narrative]
-    CHALLENGE: [One sentence 24-hour mission]
-    VISUAL: [A bright, cinematic, storybook-style illustration description]
+    prompt = f"""
+    Today is Day {day_of_year} of the journey. 
+    Act as a wise philosopher who speaks to Gen Z. 
+    
+    TASK:
+    1. Identify the verse from Bhagvad Gita corresponding to this sequence (start from Chapter 1, Verse 1 and move forward daily).
+    2. Provide:
+       - SANSKRIT: The Shloka.
+       - HINDI: The meaning written in Hindi Devanagari script.
+       - VIBE CHECK: A 1-sentence Gen Z summary (Hinglish allowed).
+       - STORY: A 500-word gripping, modern-day story (English/Hinglish) illustrating this specific verse. 
+       - CHALLENGE: A practical 24-hour mission.
+       - VISUAL: A prompt for an oil painting of this scene.
+
+    Format EXACTLY:
+    VERSE: [Sanskrit]
+    HINDI: [Hindi Meaning]
+    VIBE: [Summary]
+    STORY: [Narrative]
+    CHALLENGE: [Mission]
+    VISUAL: [Image Prompt]
     """
     
     payload = {"contents": [{"parts": [{"text": prompt}]}]}
@@ -30,81 +45,72 @@ def get_wisdom_package():
         full_text = data['candidates'][0]['content']['parts'][0]['text']
         
         def extract(label, text):
-            pattern = rf"{label}:(.*?)(?=\n[A-Z]+:|$)"
+            pattern = rf"{label}:(.*?)(?=\n[A-Z ]+:|$)"
             match = re.search(pattern, text, re.S | re.I)
             return match.group(1).strip() if match else ""
 
-        title = extract("TITLE", full_text) or "A Tale for Today"
-        challenge = extract("CHALLENGE", full_text) or "Reflect on this story today."
-        visual = extract("VISUAL", full_text) or "Soft watercolor painting, cinematic sunlight"
-        
-        try:
-            raw_story = full_text.split("STORY:")[1].split("CHALLENGE:")[0].strip()
-            # LOGIC FOR DROP CAP: Take the first letter and the rest of the story separately
-            first_letter = raw_story[0]
-            remaining_story = raw_story[1:].replace('\n', '<br>')
-            
-            # Formatted story with Drop Cap span
-            story_html = f"""<span style="float: left; color: #a68b5a; font-size: 75px; line-height: 60px; padding-top: 4px; padding-right: 8px; padding-left: 3px; font-family: 'Georgia', serif; font-weight: bold;">{first_letter}</span>{remaining_story}"""
-        except:
-            story_html = "The pages are being turned. Please wait."
+        shloka = extract("VERSE", full_text)
+        hindi = extract("HINDI", full_text)
+        vibe = extract("VIBE", full_text)
+        challenge = extract("CHALLENGE", full_text)
+        visual = extract("VISUAL", full_text)
+        raw_story = extract("STORY", full_text)
 
-        encoded_visual = urllib.parse.quote(visual)
-        image_url = f"https://image.pollinations.ai/prompt/{encoded_visual}%20style%20of%20oil%20painting%20highly%20detailed?width=1000&height=600&nologo=true"
+        # Drop Cap for Storybook Feel
+        first_letter = raw_story[0]
+        remaining_story = raw_story[1:].replace('\n', '<br>')
+        story_html = f"""<span style="float: left; color: #b8922e; font-size: 70px; line-height: 60px; padding-top: 4px; padding-right: 8px; font-weight: bold; font-family: serif;">{first_letter}</span>{remaining_story}"""
+
+        image_url = f"https://image.pollinations.ai/prompt/{urllib.parse.quote(visual)}?width=1000&height=600&nologo=true"
         
-        return title, story_html, challenge, image_url
+        return shloka, hindi, vibe, story_html, challenge, image_url
     except Exception as e:
-        return "The Unwritten Chapter", "Error loading story.", "Stay curious.", ""
+        print(f"Error: {e}")
+        return "Shloka loading...", "Bhavarth loading...", "Vibe check failing.", "Story loading...", "", ""
 
 def send_story():
-    if not EMAIL_SENDER or "@" not in EMAIL_SENDER: return
-
-    title, story, challenge, image_url = get_wisdom_package()
+    if not EMAIL_SENDER: return
+    shloka, hindi, vibe, story, challenge, image_url = get_wisdom_package()
     
     msg = MIMEMultipart()
-    msg['Subject'] = f"The Daily Tale: {title}"
+    msg['Subject'] = f"The Gita Code | Day {datetime.now().timetuple().tm_yday}"
     msg['From'] = f"The Storyteller <{EMAIL_SENDER}>"
     msg['To'] = EMAIL_SENDER
     
     html = f"""
-    <div style="background-color: #f7f3ed; padding: 40px 10px; font-family: 'Georgia', serif;">
-        <div style="max-width: 600px; margin: auto; background-color: #fffdf5; padding: 50px; border-radius: 2px; box-shadow: 0 10px 30px rgba(0,0,0,0.05); border: 1px solid #e0dcd0;">
+    <div style="background-color: #fdfaf5; padding: 30px 10px; font-family: 'Georgia', serif; color: #2c3e50;">
+        <div style="max-width: 600px; margin: auto; background-color: #ffffff; padding: 40px; border-radius: 4px; border: 1px solid #e0dcd0; box-shadow: 0 4px 20px rgba(0,0,0,0.05);">
             
-            <div style="text-align: center; margin-bottom: 40px;">
-                <p style="text-transform: uppercase; letter-spacing: 4px; font-size: 11px; color: #a68b5a; margin-bottom: 10px;">• Entry {datetime.now().strftime('%B %d')} •</p>
-                <h1 style="font-size: 42px; font-weight: normal; color: #1a252f; margin: 0; line-height: 1.1; font-family: 'Times New Roman', serif;">{title}</h1>
-                <div style="width: 60px; height: 1px; background-color: #a68b5a; margin: 25px auto;"></div>
+            <div style="text-align: center; border-bottom: 1px solid #eee; padding-bottom: 20px; margin-bottom: 30px;">
+                <p style="text-transform: uppercase; letter-spacing: 3px; font-size: 11px; color: #a68b5a;">The Eternal Song • Series I</p>
+                <div style="font-size: 20px; color: #1a252f; margin: 20px 0; font-weight: bold; line-height: 1.6;">{shloka}</div>
+                <div style="font-size: 18px; color: #5d4037; font-style: italic;">{hindi}</div>
             </div>
 
-            <img src="{image_url}" style="width: 100%; height: auto; border-radius: 2px; margin-bottom: 40px; border: 1px solid #f0ede4;">
+            <div style="background: #fffcf0; border-left: 4px solid #b8922e; padding: 15px; margin-bottom: 30px; font-size: 16px;">
+                <strong>VIBE CHECK:</strong> {vibe}
+            </div>
+
+            <img src="{image_url}" style="width: 100%; border-radius: 2px; margin-bottom: 30px;">
             
-            <div style="font-size: 20px; line-height: 1.8; color: #2c3e50; text-align: justify; hyphens: auto;">
+            <div style="font-size: 19px; line-height: 1.8; text-align: justify; color: #34495e;">
                 {story}
             </div>
             
-            <div style="margin-top: 50px; padding: 30px; border: 1px solid #e0dcd0; text-align: center; background-color: #fcfbf7; border-radius: 8px;">
-                <p style="font-size: 13px; text-transform: uppercase; letter-spacing: 2px; color: #a68b5a; margin-bottom: 12px; font-weight: bold;">The 24-Hour Reflection</p>
-                <p style="font-size: 22px; font-style: italic; color: #1a252f; margin: 0; line-height: 1.4;">"{challenge}"</p>
+            <div style="margin-top: 40px; padding: 25px; background-color: #f9f7f2; border: 1px dashed #b8922e; border-radius: 10px; text-align: center;">
+                <p style="font-size: 12px; text-transform: uppercase; letter-spacing: 2px; color: #a68b5a;">Daily Dharma Mission</p>
+                <p style="font-size: 19px; font-weight: bold; color: #1a252f; margin: 10px 0;">{challenge}</p>
             </div>
-            
-            <div style="text-align: center; margin-top: 50px;">
-                <div style="color: #a68b5a; font-size: 20px; margin-bottom: 10px;">❦</div>
-                <p style="font-size: 12px; color: #95a5a6; font-style: italic; letter-spacing: 1px;">End of Chapter. Tomorrow, the journey continues.</p>
-            </div>
+
+            <div style="text-align: center; margin-top: 40px; font-size: 20px;">🪷</div>
         </div>
     </div>
     """
-    
     msg.attach(MIMEText(html, 'html'))
-    
-    try:
-        with smtplib.SMTP('smtp.gmail.com', 587) as server:
-            server.starttls()
-            server.login(EMAIL_SENDER, EMAIL_PASSWORD)
-            server.sendmail(EMAIL_SENDER, [EMAIL_SENDER], msg.as_string())
-        print("Success: The Drop-Cap Storybook edition has been delivered.")
-    except Exception as e:
-        print(f"Delivery Error: {e}")
+    with smtplib.SMTP('smtp.gmail.com', 587) as s:
+        s.starttls()
+        s.login(EMAIL_SENDER, EMAIL_PASSWORD)
+        s.sendmail(EMAIL_SENDER, [EMAIL_SENDER], msg.as_string())
 
 if __name__ == "__main__":
     send_story()
