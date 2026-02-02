@@ -13,7 +13,7 @@ GEMINI_KEY = str(os.environ.get('GEMINI_API_KEY', '')).strip()
 def clean_text(text):
     """Removes markdown stars and extra whitespace."""
     if not text: return ""
-    text = re.sub(r'\*+', '', text) # Remove all *
+    text = re.sub(r'\*+', '', text)
     return text.strip()
 
 def get_wisdom_package():
@@ -71,24 +71,21 @@ def create_pdf(title, shloka, hindi, vibe, raw_story, challenge):
     pdf.set_auto_page_break(auto=True, margin=15)
     pdf.add_page()
     
-    # 1. Fonts
     font_path = 'NotoSansDevanagari-Regular.ttf'
     has_hindi = os.path.exists(font_path)
-    if has_hindi: pdf.add_font('HindiFont', '', font_path)
+    if has_hindi: 
+        pdf.add_font('HindiFont', '', font_path)
 
-    # 2. Header
     pdf.set_font("Arial", 'B', 10)
     pdf.set_text_color(166, 139, 90)
     pdf.cell(0, 10, txt="THE GITA CODE • SERIES I", ln=True, align='C')
     pdf.ln(5)
 
-    # 3. Title
     pdf.set_font("Times", 'B', 24)
     pdf.set_text_color(26, 37, 47)
     pdf.multi_cell(0, 15, txt=title.upper(), align='C')
     pdf.ln(10)
 
-    # 4. The Verse (Sanskrit & Hindi)
     if has_hindi:
         pdf.set_font('HindiFont', '', 14)
         pdf.set_text_color(93, 64, 55)
@@ -100,9 +97,7 @@ def create_pdf(title, shloka, hindi, vibe, raw_story, challenge):
         pdf.set_font('Arial', 'I', 12)
         pdf.multi_cell(0, 10, txt=shloka + "\n" + hindi, align='C')
     
-    pdf.ln(15)
-
-    # 5. Vibe Check
+    pdf.ln(10)
     pdf.set_fill_color(252, 251, 247)
     pdf.set_font("Arial", 'B', 11)
     pdf.set_text_color(184, 146, 46)
@@ -112,13 +107,11 @@ def create_pdf(title, shloka, hindi, vibe, raw_story, challenge):
     pdf.multi_cell(0, 7, txt=vibe)
     pdf.ln(10)
 
-    # 6. The Story
     pdf.set_font("Times", '', 12)
     pdf.set_text_color(44, 62, 80)
     pdf.multi_cell(0, 8, txt=raw_story, align='J')
     pdf.ln(15)
 
-    # 7. Challenge Footer
     pdf.set_fill_color(26, 37, 47)
     pdf.set_text_color(255, 255, 255)
     pdf.set_font("Arial", 'B', 12)
@@ -150,4 +143,29 @@ def send_story():
             </div>
             <img src="{image_url}" style="width: 100%; border-radius: 4px; margin: 20px 0;">
             <div style="font-size: 19px; line-height: 1.8; text-align: justify;">{story_html}</div>
-            <div style="margin-top: 30px; padding: 25px; background: #1a252f; color: #fff; text-align: center; border-radius: 8
+            <div style="margin-top: 30px; padding: 25px; background: #1a252f; color: #fff; text-align: center; border-radius: 8px;">
+                <p style="font-size: 11px; text-transform: uppercase; color: #d4af37;">24-Hour Mission</p>
+                <p style="font-size: 18px; font-weight: bold; margin: 5px 0;">{challenge}</p>
+            </div>
+        </div>
+    </div>
+    """
+    msg.attach(MIMEText(html_body, 'html'))
+    
+    if os.path.exists(pdf_file):
+        with open(pdf_file, "rb") as f:
+            part = MIMEApplication(f.read(), _subtype="pdf")
+            part.add_header('Content-Disposition', 'attachment', filename=pdf_file)
+            msg.attach(part)
+
+    try:
+        with smtplib.SMTP('smtp.gmail.com', 587) as s:
+            s.starttls()
+            s.login(EMAIL_SENDER, EMAIL_PASSWORD)
+            s.sendmail(EMAIL_SENDER, [EMAIL_SENDER], msg.as_string())
+        print("Success: Story & Clean PDF delivered.")
+    except Exception as e:
+        print(f"SMTP Error: {e}")
+
+if __name__ == "__main__":
+    send_story()
