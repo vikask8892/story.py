@@ -14,15 +14,10 @@ GEMINI_KEY = str(os.environ.get('GEMINI_API_KEY', '')).strip()
 def clean_for_pdf(text):
     """Replaces smart quotes/dashes and removes markdown to prevent PDF crashes."""
     if not text: return ""
-    # Remove markdown stars
     text = re.sub(r'\*+', '', text)
-    # Replace smart/unicode characters with ASCII equivalents
     replacements = {
-        '\u2018': "'", '\u2019': "'",  # Smart single quotes
-        '\u201c': '"', '\u201d': '"',  # Smart double quotes
-        '\u2013': '-', '\u2014': '-',  # En and Em dashes
-        '\u2022': '-',                # Bullet points
-        '\u2026': '...',              # Ellipsis
+        '\u2018': "'", '\u2019': "'", '\u201c': '"', '\u201d': '"',
+        '\u2013': '-', '\u2014': '-', '\u2022': '-', '\u2026': '...',
     }
     for old, new in replacements.items():
         text = text.replace(old, new)
@@ -58,7 +53,6 @@ def get_wisdom_package():
             match = re.search(pattern, text, re.S | re.I)
             return match.group(1).strip() if match else ""
 
-        # Clean all extracted fields for PDF safety
         shloka = extract("SHLOKA", full_text)
         hindi = extract("HINDI", full_text)
         vibe = clean_for_pdf(extract("VIBE", full_text))
@@ -67,11 +61,9 @@ def get_wisdom_package():
         visual = extract("VISUAL", full_text)
         raw_story = clean_for_pdf(extract("STORY", full_text))
 
-        # Drop Cap for Email
         first_letter = raw_story[0] if raw_story else "T"
         remaining_story = raw_story[1:].replace('\n', '<br>') if raw_story else ""
         story_html = f"""<span style="float: left; color: #b8922e; font-size: 70px; line-height: 60px; padding-top: 4px; padding-right: 8px; font-weight: bold; font-family: serif;">{first_letter}</span>{remaining_story}"""
-
         image_url = f"https://image.pollinations.ai/prompt/{urllib.parse.quote(visual)}?width=1000&height=600&nologo=true"
         
         return shloka, hindi, vibe, story_html, raw_story, challenge, image_url, title
@@ -88,24 +80,26 @@ def create_pdf(title, shloka, hindi, vibe, raw_story, challenge):
     has_unicode_font = os.path.exists(font_path)
     
     if has_unicode_font: 
+        # Registering the same file for both regular AND bold to prevent crashes
         pdf.add_font('GitaFont', '', font_path)
+        pdf.add_font('GitaFont', 'B', font_path)
         main_font = 'GitaFont'
     else:
         main_font = 'helvetica'
 
     # 1. Header
-    pdf.set_font(main_font if has_unicode_font else "helvetica", 'B', 10)
+    pdf.set_font(main_font, 'B', 10)
     pdf.set_text_color(166, 139, 90)
     pdf.cell(0, 10, text="THE GITA CODE - SERIES I", align='C', new_x=XPos.LMARGIN, new_y=YPos.NEXT)
     pdf.ln(5)
 
     # 2. Title
-    pdf.set_font(main_font if has_unicode_font else "times", 'B', 24)
+    pdf.set_font(main_font, 'B', 24)
     pdf.set_text_color(26, 37, 47)
     pdf.multi_cell(0, 15, text=title.upper(), align='C')
     pdf.ln(10)
 
-    # 3. Verse (Sanskrit & Hindi)
+    # 3. Verse
     pdf.set_font(main_font, '', 14)
     pdf.set_text_color(93, 64, 55)
     pdf.multi_cell(0, 10, text=shloka, align='C')
@@ -116,24 +110,24 @@ def create_pdf(title, shloka, hindi, vibe, raw_story, challenge):
 
     # 4. Vibe Check
     pdf.set_fill_color(252, 251, 247)
-    pdf.set_font(main_font if has_unicode_font else "helvetica", 'B', 11)
+    pdf.set_font(main_font, 'B', 11)
     pdf.set_text_color(184, 146, 46)
     pdf.cell(0, 10, text="VIBE CHECK", fill=True, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
-    pdf.set_font(main_font if has_unicode_font else "helvetica", '', 11)
+    pdf.set_font(main_font, '', 11)
     pdf.set_text_color(50, 50, 50)
     pdf.multi_cell(0, 7, text=vibe)
     pdf.ln(10)
 
-    # 5. The Story
-    pdf.set_font(main_font if has_unicode_font else "times", '', 12)
+    # 5. Story
+    pdf.set_font(main_font, '', 12)
     pdf.set_text_color(44, 62, 80)
     pdf.multi_cell(0, 8, text=raw_story, align='J')
     pdf.ln(15)
 
-    # 6. Challenge Footer
+    # 6. Mission
     pdf.set_fill_color(26, 37, 47)
     pdf.set_text_color(255, 255, 255)
-    pdf.set_font(main_font if has_unicode_font else "helvetica", 'B', 12)
+    pdf.set_font(main_font, 'B', 12)
     pdf.multi_cell(0, 15, text=f"MISSION: {challenge}", align='C', fill=True)
 
     filename = f"Gita_Code_{datetime.now().strftime('%Y%m%d')}.pdf"
@@ -182,7 +176,7 @@ def send_story():
             s.starttls()
             s.login(EMAIL_SENDER, EMAIL_PASSWORD)
             s.sendmail(EMAIL_SENDER, [EMAIL_SENDER], msg.as_string())
-        print("Success: Story & Unicode-Safe PDF delivered.")
+        print("Success: Final edition delivered.")
     except Exception as e:
         print(f"SMTP Error: {e}")
 
