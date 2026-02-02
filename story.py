@@ -4,6 +4,7 @@ from email.mime.multipart import MIMEMultipart
 from email.mime.application import MIMEApplication
 from datetime import datetime
 from fpdf import FPDF
+from fpdf.enums import XPos, YPos
 
 # --- CONFIG ---
 EMAIL_SENDER = str(os.environ.get('EMAIL_USER', '')).strip()
@@ -71,51 +72,60 @@ def create_pdf(title, shloka, hindi, vibe, raw_story, challenge):
     pdf.set_auto_page_break(auto=True, margin=15)
     pdf.add_page()
     
+    # 1. Font Handling
     font_path = 'NotoSansDevanagari-Regular.ttf'
     has_hindi = os.path.exists(font_path)
     if has_hindi: 
         pdf.add_font('HindiFont', '', font_path)
-
-    pdf.set_font("Arial", 'B', 10)
+    
+    # Use standard Arial for English parts, but remove the bullet point to avoid encoding errors
+    pdf.set_font("helvetica", 'B', 10)
     pdf.set_text_color(166, 139, 90)
-    pdf.cell(0, 10, txt="THE GITA CODE • SERIES I", ln=True, align='C')
+    # Changed bullet point to a dash for better compatibility
+    pdf.cell(0, 10, text="THE GITA CODE - SERIES I", align='C', new_x=XPos.LMARGIN, new_y=YPos.NEXT)
     pdf.ln(5)
 
-    pdf.set_font("Times", 'B', 24)
+    # 2. Title
+    pdf.set_font("times", 'B', 24)
     pdf.set_text_color(26, 37, 47)
-    pdf.multi_cell(0, 15, txt=title.upper(), align='C')
+    pdf.multi_cell(0, 15, text=title.upper(), align='C')
     pdf.ln(10)
 
+    # 3. Verse (Sanskrit & Hindi)
     if has_hindi:
         pdf.set_font('HindiFont', '', 14)
         pdf.set_text_color(93, 64, 55)
-        pdf.multi_cell(0, 10, txt=shloka, align='C')
+        pdf.multi_cell(0, 10, text=shloka, align='C')
         pdf.ln(5)
         pdf.set_font('HindiFont', '', 12)
-        pdf.multi_cell(0, 8, txt=hindi, align='C')
+        pdf.multi_cell(0, 8, text=hindi, align='C')
     else:
-        pdf.set_font('Arial', 'I', 12)
-        pdf.multi_cell(0, 10, txt=shloka + "\n" + hindi, align='C')
+        pdf.set_font("helvetica", 'I', 12)
+        pdf.multi_cell(0, 10, text=shloka + "\n" + hindi, align='C')
     
     pdf.ln(10)
+
+    # 4. Vibe Check
     pdf.set_fill_color(252, 251, 247)
-    pdf.set_font("Arial", 'B', 11)
+    pdf.set_font("helvetica", 'B', 11)
     pdf.set_text_color(184, 146, 46)
-    pdf.cell(0, 10, txt="VIBE CHECK", ln=True, fill=True)
-    pdf.set_font("Arial", '', 11)
+    pdf.cell(0, 10, text="VIBE CHECK", fill=True, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+    pdf.set_font("helvetica", '', 11)
     pdf.set_text_color(50, 50, 50)
-    pdf.multi_cell(0, 7, txt=vibe)
+    pdf.multi_cell(0, 7, text=vibe)
     pdf.ln(10)
 
-    pdf.set_font("Times", '', 12)
+    # 5. The Story
+    pdf.set_font("times", '', 12)
     pdf.set_text_color(44, 62, 80)
-    pdf.multi_cell(0, 8, txt=raw_story, align='J')
+    pdf.multi_cell(0, 8, text=raw_story, align='J')
     pdf.ln(15)
 
+    # 6. Challenge Footer
     pdf.set_fill_color(26, 37, 47)
     pdf.set_text_color(255, 255, 255)
-    pdf.set_font("Arial", 'B', 12)
-    pdf.multi_cell(0, 15, txt=f"MISSION: {challenge}", align='C', fill=True)
+    pdf.set_font("helvetica", 'B', 12)
+    pdf.multi_cell(0, 15, text=f"MISSION: {challenge}", align='C', fill=True)
 
     filename = f"Gita_Code_{datetime.now().strftime('%Y%m%d')}.pdf"
     pdf.output(filename)
