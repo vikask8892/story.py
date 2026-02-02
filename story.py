@@ -11,7 +11,7 @@ EMAIL_SENDER = str(os.environ.get('EMAIL_USER', '')).strip()
 EMAIL_PASSWORD = str(os.environ.get('EMAIL_PASS', '')).strip()
 GEMINI_KEY = str(os.environ.get('GEMINI_API_KEY', '')).strip()
 
-# Set this to the date you want to be "Day 1" (Year, Month, Day)
+# Set this to Feb 2nd so today is Day 1
 START_DATE = datetime(2026, 2, 2) 
 
 # Gita Chapter Lengths
@@ -20,7 +20,7 @@ GITA_CH_LENGTHS = [47, 72, 43, 42, 29, 47, 30, 28, 34, 42, 55, 20, 35, 27, 20, 2
 def get_current_day_number():
     """Calculates days passed since START_DATE."""
     delta = datetime.now() - START_DATE
-    return delta.days + 1  # Results in 1 today, 2 tomorrow
+    return delta.days + 1  # 1 today, 2 tomorrow
 
 def get_current_verse_ref(day_num):
     """Maps day number to specific Ch and Verse."""
@@ -32,6 +32,7 @@ def get_current_verse_ref(day_num):
     return 1, 1
 
 def clean_for_pdf(text):
+    """Removes problematic characters that crash the PDF generator."""
     if not text: return ""
     text = re.sub(r'\*+', '', text)
     replacements = {
@@ -43,6 +44,7 @@ def clean_for_pdf(text):
     return text.strip()
 
 def get_wisdom_package():
+    # Using gemini-2.0-flash for high-speed consistent responses
     url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={GEMINI_KEY}"
     
     day_num = get_current_day_number()
@@ -62,7 +64,7 @@ def get_wisdom_package():
     [VISUAL]: (Cinematic image prompt)
     """
     
-    # temperature: 0.0 makes the AI response consistent for testing
+    # temperature: 0.0 makes the AI response deterministic (identical every run today)
     payload = {
         "contents": [{"parts": [{"text": prompt}]}],
         "generationConfig": {"temperature": 0.0}
@@ -86,8 +88,11 @@ def get_wisdom_package():
         visual = extract("VISUAL", full_text)
         raw_story = clean_for_pdf(extract("STORY", full_text))
 
+        # --- FIX: Move string processing outside the f-string to avoid backslash error ---
         first_letter = raw_story[0] if raw_story else "T"
-        story_html = f"""<span style="float: left; color: #b8922e; font-size: 70px; line-height: 60px; padding-top: 4px; padding-right: 8px; font-weight: bold;">{first_letter}</span>{raw_story[1:].replace('\n', '<br>')}"""
+        story_body_html = raw_story[1:].replace('\n', '<br>')
+        story_html = f"""<span style="float: left; color: #b8922e; font-size: 70px; line-height: 60px; padding-top: 4px; padding-right: 8px; font-weight: bold;">{first_letter}</span>{story_body_html}"""
+        
         image_url = f"https://image.pollinations.ai/prompt/{urllib.parse.quote(visual)}?width=1000&height=600&nologo=true"
         
         return shloka, hindi, vibe, story_html, raw_story, challenge, image_url, title, day_num, chapter, verse
@@ -109,7 +114,7 @@ def create_pdf(title, shloka, hindi, vibe, raw_story, challenge, day, ch, v):
     else:
         main_font = 'helvetica'
 
-    # 1. Header
+    # 1. Header (Includes Day Number)
     pdf.set_font(main_font, 'B', 10)
     pdf.set_text_color(166, 139, 90)
     pdf.cell(0, 10, text=f"THE GITA CODE - DAY {day} | CHAPTER {ch}, VERSE {v}", align='C', new_x=XPos.LMARGIN, new_y=YPos.NEXT)
@@ -130,7 +135,7 @@ def create_pdf(title, shloka, hindi, vibe, raw_story, challenge, day, ch, v):
     pdf.multi_cell(0, 8, text=hindi, align='C')
     pdf.ln(10)
 
-    # 4. Vibe
+    # 4. Vibe Check
     pdf.set_fill_color(252, 251, 247)
     pdf.set_font(main_font, 'B', 11)
     pdf.set_text_color(184, 146, 46)
@@ -152,12 +157,17 @@ def create_pdf(title, shloka, hindi, vibe, raw_story, challenge, day, ch, v):
     pdf.set_font(main_font, 'B', 12)
     pdf.multi_cell(0, 15, text=f"MISSION: {challenge}", align='C', fill=True)
     
-    # 7. Lotus Image
+    # 7. Lotus Image (Centered Bottom)
     try:
+        # High-resolution golden lotus icon
         lotus_url = "https://cdn-icons-png.flaticon.com/512/2913/2913459.png"
         pdf.image(lotus_url, x=95, y=pdf.h - 25, w=15)
     except:
-        pass
+        # Text fallback if URL fails
+        pdf.set_y(pdf.h - 25)
+        pdf.set_font(main_font, '', 20)
+        pdf.set_text_color(184, 146, 46)
+        pdf.cell(0, 10, text="~ * ~", align='C')
 
     filename = f"Gita_Code_Day_{day}.pdf"
     pdf.output(filename)
@@ -168,47 +178,4 @@ def send_story():
     if not package: return
     shloka, hindi, vibe, story_html, raw_story, challenge, image_url, title, day, ch, v = package
     
-    pdf_file = create_pdf(title, shloka, hindi, vibe, raw_story, challenge, day, ch, v)
-    
-    msg = MIMEMultipart()
-    msg['Subject'] = f"📜 Day {day} | {title}"
-    msg['From'] = f"The Storyteller <{EMAIL_SENDER}>"
-    msg['To'] = EMAIL_SENDER
-    
-    html_body = f"""
-    <div style="background-color: #fdfaf5; padding: 30px 10px; font-family: 'Georgia', serif; color: #2c3e50;">
-        <div style="max-width: 600px; margin: auto; background-color: #ffffff; padding: 40px; border-top: 8px solid #d4af37; border: 1px solid #e0dcd0;">
-            <div style="text-align: center;">
-                <p style="text-transform: uppercase; letter-spacing: 3px; font-size: 11px; color: #a68b5a;">Day {day} • Chapter {ch} Verse {v}</p>
-                <h1 style="color: #1a252f; font-size: 32px;">{title}</h1>
-                <div style="font-size: 18px; font-style: italic; color: #5d4037; margin: 20px 0;">{shloka}<br><br>{hindi}</div>
-            </div>
-            <img src="{image_url}" style="width: 100%; border-radius: 4px; margin: 20px 0;">
-            <div style="font-size: 19px; line-height: 1.8; text-align: justify;">{story_html}</div>
-            <div style="margin-top: 30px; padding: 25px; background: #1a252f; color: #fff; text-align: center; border-radius: 8px;">
-                <p style="font-size: 11px; text-transform: uppercase; color: #d4af37;">24-Hour Mission</p>
-                <p style="font-size: 18px; font-weight: bold; margin: 5px 0;">{challenge}</p>
-            </div>
-            <p style="text-align: center; color: #a68b5a; font-size: 25px; margin-top: 20px;">🪷</p>
-        </div>
-    </div>
-    """
-    msg.attach(MIMEText(html_body, 'html'))
-    
-    if os.path.exists(pdf_file):
-        with open(pdf_file, "rb") as f:
-            part = MIMEApplication(f.read(), _subtype="pdf")
-            part.add_header('Content-Disposition', 'attachment', filename=pdf_file)
-            msg.attach(part)
-
-    try:
-        with smtplib.SMTP('smtp.gmail.com', 587) as s:
-            s.starttls()
-            s.login(EMAIL_SENDER, EMAIL_PASSWORD)
-            s.sendmail(EMAIL_SENDER, [EMAIL_SENDER], msg.as_string())
-        print(f"Success: Day {day} (Ch {ch}.{v}) delivered.")
-    except Exception as e:
-        print(f"SMTP Error: {e}")
-
-if __name__ == "__main__":
-    send_story()
+    pdf_file = create
