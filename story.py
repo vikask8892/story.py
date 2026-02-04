@@ -33,20 +33,30 @@ def clean_for_pdf(text):
     return text.encode('ascii', 'ignore').decode('ascii')
 
 def get_wisdom_package():
-    # Using the most stable 1.5 flash model for broader compatibility
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={GEMINI_KEY}"
+    # UPDATED: Using 'gemini-1.5-flash-latest' to fix the 404 error
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key={GEMINI_KEY}"
     day, ch, v = get_current_verse_info()
     
-    prompt = f"Explain Bhagavad Gita CHAPTER {ch}, VERSE {v}. Provide [SHLOKA], [HINDI], [VIBE], [TITLE], [STORY], [CHALLENGE], [VISUAL]."
+    prompt = f"""
+    Act as a modern spiritual guide. Today is Day {day}. 
+    Explain Bhagavad Gita CHAPTER {ch}, VERSE {v}.
+    
+    Format your response EXACTLY like this:
+    [SHLOKA]: (The Sanskrit text)
+    [HINDI]: (The Hindi translation)
+    [VIBE]: (A one-sentence Gen-Z summary)
+    [TITLE]: (A 3-4 word catchy title)
+    [STORY]: (A 500-word modern-day story about a relatable character applying this verse)
+    [CHALLENGE]: (One specific task for the reader today)
+    [VISUAL]: (A detailed cinematic prompt for an AI image generator)
+    """
     
     payload = {
         "contents": [{"parts": [{"text": prompt}]}],
-        "generationConfig": {"temperature": 0.2},
-        # TURN OFF SAFETY FILTERS to prevent battlefield verse blocking
+        "generationConfig": {"temperature": 0.7}, # Slightly higher for better storytelling
         "safetySettings": [
             {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
             {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE"},
-            {"category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_NONE"},
             {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE"}
         ]
     }
@@ -55,9 +65,8 @@ def get_wisdom_package():
         response = requests.post(url, json=payload, timeout=90)
         res_json = response.json()
         
-        # LOGGING: This helps us see why it failed in the GitHub console
         if 'candidates' not in res_json:
-            print(f"API Error Response: {json.dumps(res_json)}")
+            print(f"API Detailed Error: {json.dumps(res_json)}")
             return None
 
         full_text = res_json['candidates'][0]['content']['parts'][0]['text']
@@ -86,25 +95,28 @@ def create_pdf(data):
     pdf.add_page()
     pdf.set_font('helvetica', 'B', 10)
     pdf.set_text_color(166, 139, 90)
-    pdf.cell(0, 10, f"DAY {data['day']} | CHAPTER {data['ch']} VERSE {data['v']}", align='C', new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+    pdf.cell(0, 10, f"THE GITA CODE - DAY {data['day']} | CHAPTER {data['ch']} VERSE {data['v']}", align='C', new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+    
     pdf.set_font('helvetica', 'B', 22); pdf.set_text_color(26, 37, 47)
     pdf.multi_cell(0, 15, data['title'].upper(), align='C')
     pdf.ln(5)
-    pdf.set_font('helvetica', '', 12); pdf.multi_cell(0, 8, data['raw_story'], align='J')
+    
+    pdf.set_font('helvetica', '', 12); pdf.set_text_color(44, 62, 80)
+    pdf.multi_cell(0, 8, data['raw_story'], align='J')
     
     try:
         lotus = "https://cdn-icons-png.flaticon.com/512/2913/2913459.png"
         pdf.image(lotus, x=95, y=pdf.h - 25, w=15)
     except: pass
     
-    filename = f"Gita_Day_{data['day']}.pdf"
+    filename = f"Gita_Code_Day_{data['day']}.pdf"
     pdf.output(filename)
     return filename
 
 def run_delivery():
     data = get_wisdom_package()
     if not data:
-        print("Stopping: No data received from AI.")
+        print("Stopping: API call failed.")
         return
         
     pdf_name = create_pdf(data)
@@ -112,22 +124,26 @@ def run_delivery():
     image_url = f"https://image.pollinations.ai/prompt/{urllib.parse.quote(data['visual'])}?width=1000&height=600&nologo=true"
 
     msg = MIMEMultipart()
-    msg['Subject'] = f"Gita Code Day {data['day']} | {data['title']} [ID:{unique_ref}]"
+    msg['Subject'] = f"Day {data['day']} | {data['title']} [ID:{unique_ref}]"
     msg['From'] = f"Gita Storyteller <{EMAIL_SENDER}>"
     msg['To'] = EMAIL_SENDER
     
     html_content = f"""
-    <div style="font-family: serif; color: #2c3e50; background: #fdfaf5; padding: 20px;">
-        <div style="max-width: 600px; margin: auto; background: #fff; padding: 30px; border-top: 5px solid #d4af37; border-radius: 8px;">
-            <p style="text-align: center; color: #a68b5a;">DAY {data['day']} • VERSE {data['ch']}.{data['v']}</p>
-            <h1 style="text-align: center;">{data['title']}</h1>
-            <div style="text-align: center; font-style: italic; margin: 25px; color: #5d4037;">{data['shloka']}<br><br>{data['hindi']}</div>
-            <img src="{image_url}" style="width: 100%; border-radius: 5px;">
-            <div style="font-size: 19px; line-height: 1.8; text-align: justify; margin-top:20px;">{data['story_html']}</div>
-            <div style="background: #1a252f; color: #fff; padding: 20px; text-align: center; margin-top: 30px; border-radius: 5px;">
-                <b>MISSION:</b> {data['challenge']}
+    <div style="font-family: 'Georgia', serif; color: #2c3e50; background: #fdfaf5; padding: 20px;">
+        <div style="max-width: 600px; margin: auto; background: #fff; padding: 30px; border-top: 8px solid #d4af37; border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.05);">
+            <p style="text-align: center; color: #a68b5a; letter-spacing: 2px; text-transform: uppercase; font-size: 12px;">Day {data['day']} • Chapter {data['ch']} Verse {data['v']}</p>
+            <h1 style="text-align: center; color: #1a252f;">{data['title']}</h1>
+            <div style="text-align: center; font-style: italic; margin: 25px; color: #5d4037; background: #fff9f0; padding: 15px; border-radius: 5px;">
+                <span style="font-size: 18px;">{data['shloka']}</span><br><br>
+                <span style="font-size: 16px;">{data['hindi']}</span>
             </div>
-            <p style="text-align: center; margin-top: 30px; font-size: 24px;">🪷</p>
+            <img src="{image_url}" style="width: 100%; border-radius: 5px; margin-bottom: 20px;">
+            <div style="font-size: 18px; line-height: 1.8; text-align: justify; color: #34495e;">{data['story_html']}</div>
+            <div style="background: #1a252f; color: #fff; padding: 25px; text-align: center; margin-top: 30px; border-radius: 8px;">
+                <p style="margin: 0; font-size: 11px; color: #d4af37; text-transform: uppercase; letter-spacing: 1px;">Daily Mission</p>
+                <p style="margin: 10px 0 0 0; font-size: 18px; font-weight: bold;">{data['challenge']}</p>
+            </div>
+            <p style="text-align: center; margin-top: 30px; font-size: 28px; color: #d4af37;">🪷</p>
         </div>
     </div>
     """
@@ -144,9 +160,9 @@ def run_delivery():
         server.login(EMAIL_SENDER, EMAIL_PASSWORD)
         server.send_message(msg)
         server.quit()
-        print(f"Success! Day {data['day']} delivered.")
+        print(f"✅ Success! Day {data['day']} is on its way.")
     except Exception as e:
-        print(f"SMTP Error: {e}")
+        print(f"❌ SMTP Error: {e}")
 
 if __name__ == "__main__":
     run_delivery()
