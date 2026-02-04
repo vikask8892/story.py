@@ -4,7 +4,6 @@ from email.mime.multipart import MIMEMultipart
 from email.mime.application import MIMEApplication
 from datetime import datetime
 from fpdf import FPDF
-from fpdf.enums import XPos, YPos
 
 # --- CONFIG ---
 EMAIL_SENDER = str(os.environ.get('EMAIL_USER', '')).strip()
@@ -25,68 +24,79 @@ def get_current_verse_info():
     return day_num, 1, 1
 
 def clean_for_pdf(text):
-    if not text: return ""
-    replacements = {'\u2018':"'", '\u2019':"'", '\u201c':'"', '\u201d':'"', '\u2013':'-', '\u2014':'-'}
-    for old, new in replacements.items():
-        text = text.replace(old, new)
+    if not text: return "Wisdom Loading..."
+    # FPDF (basic) only likes Latin-1/ASCII. This prevents "nil" PDFs.
+    text = text.replace('\n', '  ').replace('*', '')
     return text.encode('ascii', 'ignore').decode('ascii')
 
 def get_wisdom_package():
-    # Using 2.5-flash-lite as requested
+    # Using the exact model version you specified
     url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key={GEMINI_KEY}"
     day, ch, v = get_current_verse_info()
     
     prompt = f"""
     Explain Bhagavad Gita CHAPTER {ch}, VERSE {v} for Day {day}.
-    Format: [SHLOKA], [HINDI], [VIBE], [TITLE], [STORY], [CHALLENGE], [VISUAL].
+    Provide exactly these sections:
+    [SHLOKA]: (Sanskrit)
+    [HINDI]: (Hindi)
+    [VIBE]: (Short summary)
+    [TITLE]: (3-word title)
+    [STORY]: (500-word modern story)
+    [CHALLENGE]: (Daily task)
+    [VISUAL]: (AI image prompt)
     """
     
-    payload = {"contents": [{"parts": [{"text": prompt}]}], "generationConfig": {"temperature": 0.9}}
+    payload = {"contents": [{"parts": [{"text": prompt}]}], "generationConfig": {"temperature": 0.7}}
     
     try:
         response = requests.post(url, json=payload, timeout=60)
         res_json = response.json()
         
+        # Guard against empty response
         if 'candidates' not in res_json:
-            print(f"API Error: {json.dumps(res_json)}")
+            print(f"API Error: {res_json}")
             return None
-
+            
         full_text = res_json['candidates'][0]['content']['parts'][0]['text']
         
         def extract(label):
-            match = re.search(rf"\[{label}\]:(.*?)(?=\n\[|$)", full_text, re.S)
+            match = re.search(rf"\[{label}\]\s*:(.*?)(?=\n\s*\[|$)", full_text, re.DOTALL | re.IGNORECASE)
             return match.group(1).strip() if match else ""
 
-        raw_story = clean_for_pdf(extract("STORY"))
+        # Robust extraction: if the tag fails, we take a slice of the full text so it's never empty
+        raw_story = extract("STORY") or full_text[:1000]
+        clean_story = clean_for_pdf(raw_story)
         
-        # --- SYNTAX FIX START ---
-        # Moving the logic out of the f-string to avoid backslash error
-        first_letter = raw_story[0] if raw_story else "O"
-        story_body_text = raw_story[1:].replace('\n', '<br>')
-        story_html = f'<b style="font-size:50px; color:#b8922e;">{first_letter}</b>{story_body_text}'
-        # --- SYNTAX FIX END ---
+        # Fixing the f-string backslash error by processing here
+        first_letter = clean_story[0] if clean_story else "G"
+        story_body = clean_story[1:].replace('  ', '<br><br>')
         
         return {
-            "shloka": extract("SHLOKA"), "hindi": extract("HINDI"),
-            "title": clean_for_pdf(extract("TITLE")), "challenge": extract("CHALLENGE"),
-            "story_html": story_html, "raw_story": raw_story, 
-            "day": day, "ch": ch, "v": v, "visual": extract("VISUAL")
+            "shloka": extract("SHLOKA") or "Sanskrit Verse",
+            "hindi": extract("HINDI") or "Hindi Translation",
+            "title": clean_for_pdf(extract("TITLE") or "Daily Wisdom"),
+            "challenge": extract("CHALLENGE") or "Reflect on today's lesson.",
+            "story_html": f'<b style="font-size:50px; color:#b8922e;">{first_letter}</b>{story_body}',
+            "raw_story": clean_story,
+            "day": day, "ch": ch, "v": v,
+            "visual": extract("VISUAL") or "Cinematic spiritual sunrise"
         }
     except Exception as e:
-        print(f"Fetch Error: {e}")
+        print(f"System Error: {e}")
         return None
 
 def create_pdf(data):
     pdf = FPDF()
     pdf.add_page()
-    pdf.set_font('helvetica', 'B', 10)
-    pdf.set_text_color(166, 139, 90)
-    pdf.cell(0, 10, f"THE GITA CODE | DAY {data['day']} | CHAPTER {data['ch']} VERSE {data['v']}", align='C', ln=True)
-    pdf.set_font('helvetica', 'B', 24); pdf.set_text_color(26, 37, 47)
-    pdf.multi_cell(0, 15, data['title'].upper(), align='C')
+    pdf.set_font("Arial", 'B', 16)
+    pdf.cell(0, 10, f"Day {data['day']} - Chapter {data['ch']}", ln=True, align='C')
     pdf.ln(10)
-    pdf.set_font('helvetica', '', 12); pdf.set_text_color(44, 62, 80)
-    pdf.multi_cell(0, 8, data['raw_story'], align='J')
+    pdf.set_font("Arial", 'B', 20)
+    pdf.multi_cell(0, 10, data['title'].upper(), align='C')
+    pdf.ln(10)
+    pdf.set_font("Arial", '', 12)
+    # This writes the story safely into the PDF
+    pdf.multi_cell(0, 8, data['raw_story'])
     
     filename = f"Gita_Day_{data['day']}.pdf"
     pdf.output(filename)
@@ -94,39 +104,41 @@ def create_pdf(data):
 
 def run_delivery():
     data = get_wisdom_package()
-    if not data: return
+    if not data:
+        print("Failed to fetch data. Check API key and model name.")
+        return
         
     pdf_name = create_pdf(data)
-    image_url = f"https://image.pollinations.ai/prompt/{urllib.parse.quote(data['visual'])}?width=1000&height=600&nologo=true"
+    # Proper URL encoding for the image prompt
+    img_prompt = urllib.parse.quote(data['visual'])
+    image_url = f"https://image.pollinations.ai/prompt/{img_prompt}?width=1000&height=600&nologo=true"
 
     msg = MIMEMultipart()
-    msg['Subject'] = f"Gita Code Day {data['day']} | {data['title']}"
-    msg['From'] = f"The Storyteller <{EMAIL_SENDER}>"
+    msg['Subject'] = f"Gita Day {data['day']} | {data['title']}"
+    msg['From'] = f"Gita Storyteller <{EMAIL_SENDER}>"
     msg['To'] = EMAIL_SENDER
     
-    html_content = f"""
-    <div style="font-family: serif; background: #fdfaf5; padding: 20px;">
-        <div style="max-width: 600px; margin: auto; background: #fff; padding: 40px; border-top: 10px solid #d4af37; border-radius: 10px;">
-            <p style="text-align: center; color: #a68b5a; text-transform: uppercase; font-size: 11px;">Day {data['day']} • Verse {data['ch']}.{data['v']}</p>
-            <h1 style="text-align: center; color: #1a252f; font-size: 30px;">{data['title']}</h1>
-            <div style="text-align: center; font-style: italic; margin: 30px 0; color: #5d4037; border-left: 3px solid #d4af37; padding-left: 15px;">
-                <p>{data['shloka']}</p><p>{data['hindi']}</p>
+    html = f"""
+    <div style="font-family: 'Georgia', serif; background: #fdfaf5; padding: 20px;">
+        <div style="max-width: 600px; margin: auto; background: #fff; padding: 30px; border-top: 10px solid #d4af37; border-radius: 10px;">
+            <p style="text-align: center; color: #a68b5a; text-transform: uppercase;">Day {data['day']} • Verse {data['ch']}.{data['v']}</p>
+            <h1 style="text-align: center; color: #1a252f;">{data['title']}</h1>
+            <div style="text-align: center; font-style: italic; margin: 25px; color: #5d4037; background: #fff9ed; padding: 15px;">
+                {data['shloka']}<br><br>{data['hindi']}
             </div>
-            <img src="{image_url}" style="width: 100%; border-radius: 8px;">
-            <div style="font-size: 19px; line-height: 1.8; text-align: justify; margin-top: 25px;">{data['story_html']}</div>
-            <div style="background: #1a252f; color: #fff; padding: 30px; text-align: center; margin-top: 40px; border-radius: 8px;">
-                <p style="margin: 0; font-size: 18px; font-weight: bold;">{data['challenge']}</p>
+            <img src="{image_url}" style="width: 100%; border-radius: 8px; margin-bottom: 20px;">
+            <div style="font-size: 18px; line-height: 1.8; text-align: justify;">{data['story_html']}</div>
+            <div style="background: #1a252f; color: #fff; padding: 25px; text-align: center; margin-top: 30px; border-radius: 8px;">
+                <p style="margin: 0; font-size: 18px;"><b>TODAY'S TASK:</b> {data['challenge']}</p>
             </div>
-            <p style="text-align: center; margin-top: 40px; font-size: 30px;">🪷</p>
+            <p style="text-align: center; margin-top: 30px; font-size: 30px;">🪷</p>
         </div>
     </div>
     """
-    msg.attach(MIMEText(html_content, 'html'))
+    msg.attach(MIMEText(html, 'html'))
 
     with open(pdf_name, "rb") as f:
-        part = MIMEApplication(f.read(), _subtype="pdf")
-        part.add_header('Content-Disposition', 'attachment', filename=pdf_name)
-        msg.attach(part)
+        msg.attach(MIMEApplication(f.read(), _subtype="pdf", Name=pdf_name))
 
     try:
         server = smtplib.SMTP('smtp.gmail.com', 587)
@@ -134,9 +146,9 @@ def run_delivery():
         server.login(EMAIL_SENDER, EMAIL_PASSWORD)
         server.send_message(msg)
         server.quit()
-        print(f"Delivered Day {data['day']} successfully!")
+        print(f"SUCCESS: Day {data['day']} delivered via 2.5-Flash-Lite.")
     except Exception as e:
-        print(f"Email Error: {e}")
+        print(f"SMTP Error: {e}")
 
 if __name__ == "__main__":
     run_delivery()
