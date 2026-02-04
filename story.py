@@ -11,7 +11,6 @@ EMAIL_SENDER = str(os.environ.get('EMAIL_USER', '')).strip()
 EMAIL_PASSWORD = str(os.environ.get('EMAIL_PASS', '')).strip()
 GEMINI_KEY = str(os.environ.get('GEMINI_API_KEY', '')).strip()
 
-# Day calculation logic
 START_DATE = datetime(2026, 2, 2) 
 GITA_CH_LENGTHS = [47, 72, 43, 42, 29, 47, 30, 28, 34, 42, 55, 20, 35, 27, 20, 24, 28, 78]
 
@@ -33,26 +32,16 @@ def clean_for_pdf(text):
     return text.encode('ascii', 'ignore').decode('ascii')
 
 def get_wisdom_package():
-    # UPDATED: Using 2.0-flash-lite for peak free-tier performance
+    # Using 2.0-flash-lite as requested
     url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-lite:generateContent?key={GEMINI_KEY}"
     day, ch, v = get_current_verse_info()
     
     prompt = f"""
-    Explain Bhagavad Gita CHAPTER {ch}, VERSE {v} for Day {day} of a 365-day journey.
-    Provide content in this EXACT format:
-    [SHLOKA]: (Sanskrit)
-    [HINDI]: (Hindi)
-    [VIBE]: (Gen-Z summary)
-    [TITLE]: (Catchy title)
-    [STORY]: (500-word modern-day story)
-    [CHALLENGE]: (Daily task)
-    [VISUAL]: (AI image prompt)
+    Explain Bhagavad Gita CHAPTER {ch}, VERSE {v} for Day {day}.
+    Format: [SHLOKA], [HINDI], [VIBE], [TITLE], [STORY], [CHALLENGE], [VISUAL].
     """
     
-    payload = {
-        "contents": [{"parts": [{"text": prompt}]}],
-        "generationConfig": {"temperature": 0.9}
-    }
+    payload = {"contents": [{"parts": [{"text": prompt}]}], "generationConfig": {"temperature": 0.9}}
     
     try:
         response = requests.post(url, json=payload, timeout=60)
@@ -69,8 +58,13 @@ def get_wisdom_package():
             return match.group(1).strip() if match else ""
 
         raw_story = clean_for_pdf(extract("STORY"))
+        
+        # --- SYNTAX FIX START ---
+        # Moving the logic out of the f-string to avoid backslash error
         first_letter = raw_story[0] if raw_story else "O"
-        story_html = f'<b style="font-size:50px; color:#b8922e;">{first_letter}</b>{raw_story[1:].replace("\n", "<br>")}'
+        story_body_text = raw_story[1:].replace('\n', '<br>')
+        story_html = f'<b style="font-size:50px; color:#b8922e;">{first_letter}</b>{story_body_text}'
+        # --- SYNTAX FIX END ---
         
         return {
             "shloka": extract("SHLOKA"), "hindi": extract("HINDI"),
@@ -93,11 +87,6 @@ def create_pdf(data):
     pdf.ln(10)
     pdf.set_font('helvetica', '', 12); pdf.set_text_color(44, 62, 80)
     pdf.multi_cell(0, 8, data['raw_story'], align='J')
-    
-    # Tiny Lotus footer
-    try:
-        pdf.image("https://cdn-icons-png.flaticon.com/512/2913/2913459.png", x=95, y=pdf.h - 25, w=15)
-    except: pass
     
     filename = f"Gita_Day_{data['day']}.pdf"
     pdf.output(filename)
