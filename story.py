@@ -32,8 +32,8 @@ def clean_for_pdf(text):
     return text.encode('ascii', 'ignore').decode('ascii')
 
 def get_wisdom_package():
-    # Using 2.0-flash-lite as requested
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-lite:generateContent?key={GEMINI_KEY}"
+    # Using 2.5-flash-lite as requested
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key={GEMINI_KEY}"
     day, ch, v = get_current_verse_info()
     
     prompt = f"""
