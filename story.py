@@ -9,7 +9,7 @@ EMAIL_PASSWORD = str(os.environ.get('EMAIL_PASS', '')).strip()
 GEMINI_KEY = str(os.environ.get('GEMINI_API_KEY', '')).strip()
 
 # RESTART: Day 1 is Feb 5, 2026
-START_DATE = datetime(2026, 2, 5) 
+START_DATE = datetime(2026, 2, 5)
 GITA_CH_LENGTHS = [47, 72, 43, 42, 29, 47, 30, 28, 34, 42, 55, 20, 35, 27, 20, 24, 28, 78]
 
 def get_current_verse_info():
@@ -29,6 +29,10 @@ def get_wisdom_package():
     prompt = f"""
     You are a master storyteller writing a serial saga called 'Geeta: Echoes of Kurukshetra'. 
     
+    STRICT ACCURACY REQUIREMENT:
+    For Bhagavad Gita Chapter {ch}, Verse {v}, you MUST identify the correct speaker (e.g., Dhritarashtra, Sanjaya, Arjun, or Krishna). 
+    The Hindi translation must correctly attribute the speech to that speaker.
+
     STYLE & TONE:
     - Language: Very simple English. Raw and emotional.
     - Setting: Rustic modern India (small town/village).
@@ -36,8 +40,8 @@ def get_wisdom_package():
     - Story: This is Day {day}. Start a brand new serial saga today.
     
     TASK:
-    1. Provide the FULL Sanskrit Shloka for Ch {ch}, V {v}.
-    2. Provide the full Hindi translation.
+    1. Provide the FULL Sanskrit Shloka.
+    2. Provide the full Hindi translation (start with '____ बोले:').
     3. Write Part {day} of the story (Approx 400 words).
     4. Provide a [VIBE]: Exactly two lines of Gen-Z style commentary.
 
@@ -81,12 +85,13 @@ def run_delivery():
     msg['From'] = f"Geeta: Echoes <{EMAIL_SENDER}>"
     msg['To'] = EMAIL_SENDER
     
+    # Text processing
     first_letter = data['story'][0] if data['story'] else "I"
     story_body = data['story'][1:].replace('\n', '<br>')
     vibe_check = data['vibe'].replace('\n', '<br>')
 
     html = f"""
-    <div style="font-family: 'Helvetica', sans-serif; background: #faf7f2; padding: 20px;">
+    <div style="font-family: 'Helvetica', 'Arial', sans-serif; background: #faf7f2; padding: 20px;">
         <div style="max-width: 600px; margin: auto; background: #fff; padding: 30px; border-top: 10px solid #5d4037; border-radius: 4px; box-shadow: 0 4px 10px rgba(0,0,0,0.1);">
             <p style="text-align: center; color: #8d6e63; text-transform: uppercase; font-size: 11px; letter-spacing: 2px; margin-bottom: 5px;">
                 Day {data['day']} • Ch {data['ch']}, Verse {data['v']}
@@ -129,7 +134,7 @@ def run_delivery():
         server.login(EMAIL_SENDER, EMAIL_PASSWORD)
         server.send_message(msg)
         server.quit()
-        print(f"SUCCESS: Day {data['day']} delivered.")
+        print(f"SUCCESS: Day {data['day']} delivered with corrected speaker logic.")
     except Exception as e:
         print(f"SMTP Error: {e}")
 
