@@ -26,32 +26,31 @@ def get_wisdom_package():
     url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key={GEMINI_KEY}"
     day, ch, v = get_current_verse_info()
     
-    # Updated Prompt for a Raw, Rustic, Serial Story with Hindi Names
     prompt = f"""
-    You are a master storyteller writing a serial saga called 'The Earthy Gita'. 
+    You are a master storyteller writing a serial saga called 'Geeta: Echoes of Kurukshetra'. 
     
-    STYLE:
-    - Language: Very simple, easy English.
-    - Tone: Rustic, raw, and emotional. Not corporate. 
-    - Characters: Use Hindi names (e.g., Arjun becomes 'Arjun', but set in a modern rural/small-town struggle).
-    - Story Continuity: This is Day {day}. Start a brand new serial saga today. 
-      Every day's story must be a direct continuation of the previous day. 
-      The plot must mirror the theme of Bhagavad Gita CHAPTER {ch}, VERSE {v}.
-
+    STYLE & TONE:
+    - Language: Very simple, everyday English. Raw and emotional.
+    - Setting: A rustic, small-town or village in modern India.
+    - Characters: Use common Hindi names (like Madhav, Arjun, Dev, etc.).
+    - Story Arc: This is Day {day}. Start a new serial saga today. 
+      The story must progress linearly day by day, mirroring the theme of 
+      Bhagavad Gita CHAPTER {ch}, VERSE {v}.
+    
     TASK:
     1. Provide the FULL Sanskrit Shloka for Ch {ch}, V {v}.
-    2. Provide the Hindi translation.
+    2. Provide the full Hindi translation.
     3. Write Part {day} of the story (Approx 400 words). 
-       Focus on a relatable struggle that makes the reader feel the emotion.
+       Make it feel like a chapter from a gripping local novel.
 
     STRICT FORMAT:
     [SHLOKA]: (Full Sanskrit)
     [HINDI]: (Full Hindi)
-    [VIBE]: (Simple, one-sentence vibe check)
-    [TITLE]: (3-word earthy title)
-    [STORY]: (The serial story - Part {day})
-    [CHALLENGE]: (One simple life task)
-    [VISUAL]: (AI image prompt: Cinematic, raw, rustic Indian setting)
+    [VIBE]: (Simple one-sentence summary)
+    [TITLE]: (Catchy 3-word title)
+    [STORY]: (Part {day} of the serial saga)
+    [CHALLENGE]: (One simple daily action)
+    [VISUAL]: (AI image prompt: Cinematic, raw, rustic Indian scene)
     """
     
     try:
@@ -85,39 +84,40 @@ def run_delivery():
     image_url = f"https://image.pollinations.ai/prompt/{urllib.parse.quote(clean_visual)}?width=1000&height=600&seed={uuid.uuid4().hex}&nologo=true"
 
     msg = MIMEMultipart()
-    msg['Subject'] = f"Gita Saga Day {data['day']} | {data['title']}"
-    msg['From'] = f"The Earthy Gita <{EMAIL_SENDER}>"
+    # Updated Subject Line
+    msg['Subject'] = f"Geeta: Echoes of Kurukshetra | Day {data['day']}"
+    msg['From'] = f"Geeta: Echoes <{EMAIL_SENDER}>"
     msg['To'] = EMAIL_SENDER
     
-    first_letter = data['story'][0] if data['story'] else "O"
+    first_letter = data['story'][0] if data['story'] else "I"
     story_body = data['story'][1:].replace('\n', '<br>')
 
     html = f"""
-    <div style="font-family: 'Verdana', sans-serif; background: #f4eee1; padding: 20px;">
-        <div style="max-width: 600px; margin: auto; background: #fff; padding: 30px; border-top: 8px solid #8e44ad; border-radius: 4px;">
-            <p style="text-align: center; color: #7f8c8d; text-transform: uppercase; font-size: 12px; letter-spacing: 1px;">
-                Part {data['day']} • Verse {data['ch']}.{data['v']}
+    <div style="font-family: 'Trebuchet MS', sans-serif; background: #faf7f2; padding: 20px;">
+        <div style="max-width: 600px; margin: auto; background: #fff; padding: 30px; border-top: 10px solid #5d4037; border-radius: 4px; box-shadow: 0 4px 10px rgba(0,0,0,0.1);">
+            <p style="text-align: center; color: #8d6e63; text-transform: uppercase; font-size: 11px; letter-spacing: 2px; margin-bottom: 5px;">
+                Day {data['day']} • Chapter {data['ch']}, Verse {data['v']}
             </p>
-            <h1 style="text-align: center; color: #2c3e50; margin-top: 5px;">{data['title']}</h1>
-            <p style="text-align: center; font-style: italic; color: #34495e;">"{data['vibe']}"</p>
+            <h1 style="text-align: center; color: #3e2723; margin-top: 0; font-size: 26px;">{data['title']}</h1>
+            <p style="text-align: center; font-style: italic; color: #6d4c41; margin-bottom: 25px;">"{data['vibe']}"</p>
             
-            <div style="text-align: center; margin: 25px 0; background: #fdf2ff; padding: 25px; border-radius: 5px; border-bottom: 3px solid #8e44ad;">
-                <p style="font-size: 22px; color: #4a235a; line-height: 1.4; margin-bottom: 10px;"><b>{data['shloka']}</b></p>
-                <p style="font-size: 18px; color: #5b2c6f;">{data['hindi']}</p>
+            <div style="text-align: center; margin: 20px 0; background: #efebe9; padding: 25px; border-radius: 8px;">
+                <p style="font-size: 22px; color: #2e150b; line-height: 1.4; margin-bottom: 12px;"><b>{data['shloka']}</b></p>
+                <p style="font-size: 18px; color: #4e342e; line-height: 1.5;">{data['hindi']}</p>
             </div>
             
-            <img src="{image_url}" style="width: 100%; border-radius: 4px; filter: sepia(20%);">
+            <img src="{image_url}" style="width: 100%; border-radius: 4px; margin: 15px 0;">
             
-            <div style="font-size: 18px; line-height: 1.7; text-align: left; color: #212121; margin-top: 25px;">
-                <span style="font-size: 60px; color: #8e44ad; float: left; line-height: 50px; padding-top: 10px; padding-right: 12px; font-family: serif;">{first_letter}</span>{story_body}
+            <div style="font-size: 18px; line-height: 1.8; text-align: justify; color: #212121; margin-top: 25px;">
+                <span style="font-size: 55px; color: #5d4037; float: left; line-height: 45px; padding-top: 8px; padding-right: 12px; font-family: serif; font-weight: bold;">{first_letter}</span>{story_body}
             </div>
             
-            <div style="background: #2c3e50; color: #ecf0f1; padding: 20px; text-align: center; margin-top: 40px; border-radius: 2px;">
-                <p style="margin: 0; font-size: 11px; color: #aeb6bf; text-transform: uppercase;">Today's Act</p>
-                <p style="margin: 8px 0 0 0; font-size: 18px;">{data['challenge']}</p>
+            <div style="clear: both; background: #3e2723; color: #d7ccc8; padding: 20px; text-align: center; margin-top: 40px; border-radius: 4px;">
+                <p style="margin: 0; font-size: 10px; color: #a1887f; text-transform: uppercase; letter-spacing: 1px;">The Daily Step</p>
+                <p style="margin: 8px 0 0 0; font-size: 19px; color: #ffffff;">{data['challenge']}</p>
             </div>
             
-            <p style="text-align: center; margin-top: 30px; font-size: 20px;">🌿</p>
+            <p style="text-align: center; margin-top: 35px; font-size: 14px; color: #8d6e63; letter-spacing: 3px;">••• 🕉 •••</p>
         </div>
     </div>
     """
@@ -129,9 +129,9 @@ def run_delivery():
         server.login(EMAIL_SENDER, EMAIL_PASSWORD)
         server.send_message(msg)
         server.quit()
-        print(f"SUCCESS: Restarted Day 1 delivered.")
+        print(f"SUCCESS: 'Echoes of Kurukshetra' Day {data['day']} delivered.")
     except Exception as e:
-        print(f"Error: {e}")
+        print(f"SMTP Error: {e}")
 
 if __name__ == "__main__":
     run_delivery()
