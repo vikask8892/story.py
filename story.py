@@ -30,16 +30,16 @@ def get_wisdom_package():
     You are a master storyteller writing a serial saga called 'Geeta: Echoes of Kurukshetra'. 
     
     STYLE & TONE:
-    - Language: Very simple, everyday English. Raw and emotional.
-    - Setting: A rustic, small-town or village in modern India.
+    - Language: Very simple English. Raw and emotional.
     - Characters: Use common Hindi names.
-    - Story Arc: This is Day {day}. Start a new serial saga today. 
+    - Story: This is Day {day}. Start a new serial saga. 
     
     TASK:
     1. Provide the FULL Sanskrit Shloka for Ch {ch}, V {v}.
     2. Provide the full Hindi translation.
     3. Write Part {day} of the story (Approx 400 words).
-    4. Provide a [VIBE]: Exactly two lines of Gen-Z slang/style commentary on the verse.
+    4. Provide a [VIBE]: Exactly two lines of Gen-Z style commentary.
+    5. Provide [VISUAL]: A very short (under 15 words) description of a rustic Indian scene for AI generation.
 
     STRICT FORMAT:
     [SHLOKA]: (Full Sanskrit)
@@ -48,7 +48,7 @@ def get_wisdom_package():
     [TITLE]: (Catchy 3-word title)
     [STORY]: (Part {day} of the serial saga)
     [CHALLENGE]: (One simple daily action)
-    [VISUAL]: (AI image prompt: Cinematic, raw, rustic Indian scene, 8k, highly detailed)
+    [VISUAL]: (Short AI image prompt)
     """
     
     try:
@@ -78,11 +78,11 @@ def run_delivery():
     data = get_wisdom_package()
     if not data: return
         
-    # Reinforced Image URL Logic
-    clean_visual = re.sub(r'[^a-zA-Z0-9 ]', '', data['visual'])
-    seed_val = random.randint(1000, 9999)
-    encoded_prompt = urllib.parse.quote(clean_visual)
-    image_url = f"https://image.pollinations.ai/prompt/{encoded_prompt}?width=1000&height=600&seed={seed_val}&model=flux&nologo=true"
+    # NEW IMAGE LOGIC: Extreme simplification for Gmail compatibility
+    clean_visual = re.sub(r'[^a-zA-Z ]', '', data['visual'])
+    seed_val = random.randint(1, 1000000)
+    # Using a slightly different URL structure that often bypasses proxy blocks
+    image_url = f"https://pollinations.ai/p/{urllib.parse.quote(clean_visual)}?width=1024&height=512&seed={seed_val}&nologo=true"
 
     msg = MIMEMultipart()
     msg['Subject'] = f"Geeta: Echoes of Kurukshetra | Day {data['day']}"
@@ -91,18 +91,17 @@ def run_delivery():
     
     first_letter = data['story'][0] if data['story'] else "I"
     story_body = data['story'][1:].replace('\n', '<br>')
-    # Ensure vibe is 2 lines for HTML
     vibe_check = data['vibe'].replace('\n', '<br>')
 
     html = f"""
-    <div style="font-family: 'Trebuchet MS', sans-serif; background: #faf7f2; padding: 20px;">
+    <div style="font-family: 'Helvetica', 'Arial', sans-serif; background: #faf7f2; padding: 20px;">
         <div style="max-width: 600px; margin: auto; background: #fff; padding: 30px; border-top: 10px solid #5d4037; border-radius: 4px; box-shadow: 0 4px 10px rgba(0,0,0,0.1);">
             <p style="text-align: center; color: #8d6e63; text-transform: uppercase; font-size: 11px; letter-spacing: 2px; margin-bottom: 5px;">
                 Day {data['day']} • Chapter {data['ch']}, Verse {data['v']}
             </p>
             <h1 style="text-align: center; color: #3e2723; margin-top: 0; font-size: 26px;">{data['title']}</h1>
             
-            <div style="text-align: center; font-style: italic; color: #6d4c41; margin-bottom: 25px; font-weight: bold; font-size: 15px;">
+            <div style="text-align: center; font-style: italic; color: #6d4c41; margin-bottom: 25px; font-weight: bold; font-size: 16px; line-height: 1.4;">
                 {vibe_check}
             </div>
             
@@ -111,18 +110,20 @@ def run_delivery():
                 <p style="font-size: 18px; color: #4e342e; line-height: 1.5;">{data['hindi']}</p>
             </div>
             
-            <img src="{image_url}" alt="Daily Wisdom Image" style="width: 100%; border-radius: 4px; margin: 15px 0; display: block;">
+            <div style="text-align: center; margin: 20px 0;">
+                <img src="{image_url}" width="600" style="width: 100%; max-width: 600px; border-radius: 8px; display: block; border: 0;" alt="Daily Scene">
+            </div>
             
             <div style="font-size: 18px; line-height: 1.8; text-align: justify; color: #212121; margin-top: 25px;">
                 <span style="font-size: 55px; color: #5d4037; float: left; line-height: 45px; padding-top: 8px; padding-right: 12px; font-family: serif; font-weight: bold;">{first_letter}</span>{story_body}
             </div>
             
-            <div style="clear: both; background: #3e2723; color: #d7ccc8; padding: 20px; text-align: center; margin-top: 40px; border-radius: 4px;">
+            <div style="clear: both; background: #3e2723; color: #d7ccc8; padding: 25px; text-align: center; margin-top: 40px; border-radius: 4px;">
                 <p style="margin: 0; font-size: 10px; color: #a1887f; text-transform: uppercase; letter-spacing: 1px;">The Daily Step</p>
                 <p style="margin: 8px 0 0 0; font-size: 19px; color: #ffffff;">{data['challenge']}</p>
             </div>
             
-            <p style="text-align: center; margin-top: 35px; font-size: 22px; color: #8d6e63; letter-spacing: 3px;">🕉️</p>
+            <p style="text-align: center; margin-top: 35px; font-size: 24px;">🕉️</p>
         </div>
     </div>
     """
@@ -134,7 +135,7 @@ def run_delivery():
         server.login(EMAIL_SENDER, EMAIL_PASSWORD)
         server.send_message(msg)
         server.quit()
-        print(f"SUCCESS: 'Echoes of Kurukshetra' Day {data['day']} delivered with image and vibe check.")
+        print(f"SUCCESS: 'Echoes of Kurukshetra' Day {data['day']} delivered.")
     except Exception as e:
         print(f"SMTP Error: {e}")
 
