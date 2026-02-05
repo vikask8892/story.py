@@ -8,7 +8,7 @@ EMAIL_SENDER = str(os.environ.get('EMAIL_USER', '')).strip()
 EMAIL_PASSWORD = str(os.environ.get('EMAIL_PASS', '')).strip()
 GEMINI_KEY = str(os.environ.get('GEMINI_API_KEY', '')).strip()
 
-# RESTART: Day 1 is now Feb 5, 2026
+# RESTART: Day 1 is Feb 5, 2026
 START_DATE = datetime(2026, 2, 5) 
 GITA_CH_LENGTHS = [47, 72, 43, 42, 29, 47, 30, 28, 34, 42, 55, 20, 35, 27, 20, 24, 28, 78]
 
@@ -31,9 +31,9 @@ def get_wisdom_package():
     
     STYLE & TONE:
     - Language: Very simple English. Raw and emotional.
-    - Setting: Rustic modern India.
-    - Characters: Hindi names.
-    - Story: This is Day {day}. Start a brand new serial saga. 
+    - Setting: Rustic modern India (small town/village).
+    - Characters: Hindi names (e.g., Madhav, Arjun).
+    - Story: This is Day {day}. Start a brand new serial saga today.
     
     TASK:
     1. Provide the FULL Sanskrit Shloka for Ch {ch}, V {v}.
@@ -86,10 +86,10 @@ def run_delivery():
     vibe_check = data['vibe'].replace('\n', '<br>')
 
     html = f"""
-    <div style="font-family: 'Trebuchet MS', sans-serif; background: #faf7f2; padding: 20px;">
+    <div style="font-family: 'Helvetica', sans-serif; background: #faf7f2; padding: 20px;">
         <div style="max-width: 600px; margin: auto; background: #fff; padding: 30px; border-top: 10px solid #5d4037; border-radius: 4px; box-shadow: 0 4px 10px rgba(0,0,0,0.1);">
             <p style="text-align: center; color: #8d6e63; text-transform: uppercase; font-size: 11px; letter-spacing: 2px; margin-bottom: 5px;">
-                Day {data['day']} • Chapter {data['ch']}, Verse {data['v']}
+                Day {data['day']} • Ch {data['ch']}, Verse {data['v']}
             </p>
             <h1 style="text-align: center; color: #3e2723; margin-top: 0; font-size: 26px;">{data['title']}</h1>
             
@@ -104,7 +104,7 @@ def run_delivery():
             
             <div style="text-align: center; margin: 40px 0;">
                 <hr style="border: 0; border-top: 2px solid #efebe9; margin-bottom: 10px;">
-                <span style="background: #fff; padding: 0 15px; color: #d7ccc8; font-size: 18px;">✧ ⚜ ✧</span>
+                <span style="background: #fff; padding: 0 15px; color: #d7ccc8; font-size: 20px;">✧ ⚜ ✧</span>
                 <hr style="border: 0; border-top: 2px solid #efebe9; margin-top: -12px;">
             </div>
             
@@ -124,4 +124,14 @@ def run_delivery():
     msg.attach(MIMEText(html, 'html'))
 
     try:
-        server = smtplib.SMTP('
+        server = smtplib.SMTP('smtp.gmail.com', 587)
+        server.starttls()
+        server.login(EMAIL_SENDER, EMAIL_PASSWORD)
+        server.send_message(msg)
+        server.quit()
+        print(f"SUCCESS: Day {data['day']} delivered.")
+    except Exception as e:
+        print(f"SMTP Error: {e}")
+
+if __name__ == "__main__":
+    run_delivery()
