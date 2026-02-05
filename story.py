@@ -1,4 +1,4 @@
-import requests, os, smtplib, urllib.parse, re, uuid, random
+import requests, os, smtplib, urllib.parse, re, uuid
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from datetime import datetime
@@ -31,15 +31,15 @@ def get_wisdom_package():
     
     STYLE & TONE:
     - Language: Very simple English. Raw and emotional.
-    - Characters: Use common Hindi names.
-    - Story: This is Day {day}. Start a new serial saga. 
+    - Setting: Rustic modern India.
+    - Characters: Hindi names.
+    - Story: This is Day {day}. Start a brand new serial saga. 
     
     TASK:
     1. Provide the FULL Sanskrit Shloka for Ch {ch}, V {v}.
     2. Provide the full Hindi translation.
     3. Write Part {day} of the story (Approx 400 words).
     4. Provide a [VIBE]: Exactly two lines of Gen-Z style commentary.
-    5. Provide [VISUAL]: A very short (under 15 words) description of a rustic Indian scene for AI generation.
 
     STRICT FORMAT:
     [SHLOKA]: (Full Sanskrit)
@@ -48,7 +48,6 @@ def get_wisdom_package():
     [TITLE]: (Catchy 3-word title)
     [STORY]: (Part {day} of the serial saga)
     [CHALLENGE]: (One simple daily action)
-    [VISUAL]: (Short AI image prompt)
     """
     
     try:
@@ -66,7 +65,6 @@ def get_wisdom_package():
             "vibe": extract("VIBE"), 
             "title": extract("TITLE"),
             "challenge": extract("CHALLENGE"), 
-            "visual": extract("VISUAL"),
             "story": extract("STORY"), 
             "day": day, "ch": ch, "v": v
         }
@@ -78,12 +76,6 @@ def run_delivery():
     data = get_wisdom_package()
     if not data: return
         
-    # NEW IMAGE LOGIC: Extreme simplification for Gmail compatibility
-    clean_visual = re.sub(r'[^a-zA-Z ]', '', data['visual'])
-    seed_val = random.randint(1, 1000000)
-    # Using a slightly different URL structure that often bypasses proxy blocks
-    image_url = f"https://pollinations.ai/p/{urllib.parse.quote(clean_visual)}?width=1024&height=512&seed={seed_val}&nologo=true"
-
     msg = MIMEMultipart()
     msg['Subject'] = f"Geeta: Echoes of Kurukshetra | Day {data['day']}"
     msg['From'] = f"Geeta: Echoes <{EMAIL_SENDER}>"
@@ -94,7 +86,7 @@ def run_delivery():
     vibe_check = data['vibe'].replace('\n', '<br>')
 
     html = f"""
-    <div style="font-family: 'Helvetica', 'Arial', sans-serif; background: #faf7f2; padding: 20px;">
+    <div style="font-family: 'Trebuchet MS', sans-serif; background: #faf7f2; padding: 20px;">
         <div style="max-width: 600px; margin: auto; background: #fff; padding: 30px; border-top: 10px solid #5d4037; border-radius: 4px; box-shadow: 0 4px 10px rgba(0,0,0,0.1);">
             <p style="text-align: center; color: #8d6e63; text-transform: uppercase; font-size: 11px; letter-spacing: 2px; margin-bottom: 5px;">
                 Day {data['day']} • Chapter {data['ch']}, Verse {data['v']}
@@ -110,11 +102,13 @@ def run_delivery():
                 <p style="font-size: 18px; color: #4e342e; line-height: 1.5;">{data['hindi']}</p>
             </div>
             
-            <div style="text-align: center; margin: 20px 0;">
-                <img src="{image_url}" width="600" style="width: 100%; max-width: 600px; border-radius: 8px; display: block; border: 0;" alt="Daily Scene">
+            <div style="text-align: center; margin: 40px 0;">
+                <hr style="border: 0; border-top: 2px solid #efebe9; margin-bottom: 10px;">
+                <span style="background: #fff; padding: 0 15px; color: #d7ccc8; font-size: 18px;">✧ ⚜ ✧</span>
+                <hr style="border: 0; border-top: 2px solid #efebe9; margin-top: -12px;">
             </div>
             
-            <div style="font-size: 18px; line-height: 1.8; text-align: justify; color: #212121; margin-top: 25px;">
+            <div style="font-size: 18px; line-height: 1.8; text-align: justify; color: #212121;">
                 <span style="font-size: 55px; color: #5d4037; float: left; line-height: 45px; padding-top: 8px; padding-right: 12px; font-family: serif; font-weight: bold;">{first_letter}</span>{story_body}
             </div>
             
@@ -123,21 +117,11 @@ def run_delivery():
                 <p style="margin: 8px 0 0 0; font-size: 19px; color: #ffffff;">{data['challenge']}</p>
             </div>
             
-            <p style="text-align: center; margin-top: 35px; font-size: 24px;">🕉️</p>
+            <p style="text-align: center; margin-top: 35px; font-size: 24px; color: #8d6e63;">🕉️</p>
         </div>
     </div>
     """
     msg.attach(MIMEText(html, 'html'))
 
     try:
-        server = smtplib.SMTP('smtp.gmail.com', 587)
-        server.starttls()
-        server.login(EMAIL_SENDER, EMAIL_PASSWORD)
-        server.send_message(msg)
-        server.quit()
-        print(f"SUCCESS: 'Echoes of Kurukshetra' Day {data['day']} delivered.")
-    except Exception as e:
-        print(f"SMTP Error: {e}")
-
-if __name__ == "__main__":
-    run_delivery()
+        server = smtplib.SMTP('
